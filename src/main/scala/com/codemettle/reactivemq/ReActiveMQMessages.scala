@@ -7,6 +7,8 @@
  */
 package com.codemettle.reactivemq
 
+import com.codemettle.reactivemq.model.{Destination, AMQMessage}
+
 import akka.actor.ActorRef
 import scala.concurrent.duration._
 
@@ -54,4 +56,12 @@ object ReActiveMQMessages {
 
     @SerialVersionUID(1L)
     case class ConnectionReestablished(connectionActor: ActorRef) extends ConnectionStatusMessage
+
+    sealed trait ConnectedOperation {
+        def timeout: FiniteDuration
+    }
+
+    @SerialVersionUID(1L)
+    case class SendMessage(to: Destination, message: AMQMessage, timeout: FiniteDuration = 10.seconds)
+        extends ConnectedOperation
 }

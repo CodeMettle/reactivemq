@@ -7,12 +7,13 @@
  */
 package com.codemettle.reactivemq.connection
 
-import javax.jms.{JMSException, ExceptionListener, Session, Connection}
+import javax.jms.{Connection, ExceptionListener, JMSException, Session}
 
-import com.codemettle.reactivemq.ReActiveMQMessages.CloseConnection
-import com.codemettle.reactivemq.connection.ConnectionActor.{Listener, ConnectionException}
+import com.codemettle.reactivemq.ReActiveMQMessages.{CloseConnection, SendMessage}
+import com.codemettle.reactivemq.connection.ConnectionActor.{ConnectionException, Listener}
 
 import akka.actor._
+import akka.pattern.pipe
 import scala.util.control.Exception.ignoring
 
 /**
@@ -20,8 +21,8 @@ import scala.util.control.Exception.ignoring
  *
  */
 object ConnectionActor {
-    def props(conn: Connection, sess: Session) = {
-        Props(new ConnectionActor(conn, sess))
+    def props(conn: Connection, sess: Session, connectionActor: ActorRef) = {
+        Props(new ConnectionActor(conn, sess, connectionActor))
     }
 
     private case class ConnectionException(e: JMSException)
@@ -31,7 +32,10 @@ object ConnectionActor {
     }
 }
 
-class ConnectionActor(conn: Connection, session: Session) extends Actor with ActorLogging {
+class ConnectionActor(conn: Connection, protected val session: Session, sendRepliesAs: ActorRef)
+    extends Actor with DestinationManager with ProducerManager with ActorLogging {
+    import context.dispatcher
+
     override def preStart() = {
         super.preStart()
 
@@ -39,11 +43,17 @@ class ConnectionActor(conn: Connection, session: Session) extends Actor with Act
     }
 
     override def postStop() = {
+        super.postStop()
+
         ignoring(classOf[Exception])(session.close())
         ignoring(classOf[Exception])(conn.close())
     }
 
-    def receive = {
+    def receive = handleDestinationMessages orElse handleProducerMessages orElse {
+        case m@SendMessage(dest, msg, timeout) ⇒
+            println(s"msgid: ${msg.jmsMessage.getJMSMessageID}")
+            (getProducer(dest) map (prod ⇒ prod send msg.jmsMessage)).pipeTo(sender())(sendRepliesAs)
+
         case ConnectionException(e) ⇒
             log.error(e, "Exception; closing connection")
             context stop self

@@ -17,3 +17,5 @@ case object ConnectionTimedOut extends Exception("Connection timed out") with No
 
 case object ConnectionClosedWhileReconnecting
     extends Exception("User closed connection while in disconnected state") with NoStackTrace
+
+case object UnableToConnect extends Exception("Unable to (re)connect") with NoStackTrace

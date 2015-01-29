@@ -41,7 +41,7 @@ object ConnectionFactoryActor {
         case object Closing extends State
         case object Reconnecting extends State
 
-        case class Data(waitingForConnect: Set[WaitingForConnection] = Set.empty, connection: Option[ActorRef] = None,
+        case class Data(waitingForConnect: Set[ConnectionWaiter] = Set.empty, connection: Option[ActorRef] = None,
                         reconnectInFlight: Boolean = false, subscriptions: Subscriptions = Subscriptions()) {
             def isAListener(act: ActorRef) = subscriptions isAListener act
 
@@ -69,8 +69,34 @@ object ConnectionFactoryActor {
         }
     }
 
+    private[connection] sealed trait ConnectionWaiter {
+        def reqId: UUID
+        def handleFailure(t: Throwable)(implicit connFact: ActorRef)
+        def handleSuccess(connection: ActorRef)(implicit connFact: ActorRef)
+    }
+
     private[connection] case class WaitingForConnection(sender: ActorRef, request: ConnectionRequest,
-                                                        reqId: UUID = UUID.randomUUID())
+                                                        reqId: UUID = UUID.randomUUID()) extends ConnectionWaiter {
+        override def handleFailure(t: Throwable)(implicit connFact: ActorRef): Unit = {
+            sender ! ConnectionFailed(request, t)
+        }
+
+        override def handleSuccess(connection: ActorRef)(implicit connFact: ActorRef): Unit = {
+            sender ! ConnectionEstablished(request, connFact)
+        }
+    }
+
+    private[connection] case class WaitingForOperation(sender: ActorRef, op: ConnectedOperation,
+                                                       reqId: UUID = UUID.randomUUID()) extends ConnectionWaiter {
+        override def handleFailure(t: Throwable)(implicit connFact: ActorRef): Unit = {
+            sender ! Status.Failure(t)
+        }
+
+        override def handleSuccess(connection: ActorRef)(implicit connFact: ActorRef): Unit = {
+            connection.tell(op, sender)
+        }
+    }
+
     private case class WaiterTimedOut(reqId: UUID)
     private case class OpenedConnection(conn: Connection, sess: Session)
     private case object ReestablishConnection
@@ -86,6 +112,12 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
     private def getConnectWaiter(req: ConnectionRequest) = {
         val waiter = WaitingForConnection(sender(), req)
         setTimer(waiter.reqId.toString, WaiterTimedOut(waiter.reqId), req.timeout)
+        waiter
+    }
+
+    private def getOperationWaiter(op: ConnectedOperation) = {
+        val waiter = WaitingForOperation(sender(), op)
+        setTimer(waiter.reqId.toString, WaiterTimedOut(waiter.reqId), op.timeout)
         waiter
     }
 
@@ -109,7 +141,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
     private def connectionFailedState(data: fsm.Data, failure: Throwable) = {
         cancelWaitConnectTimers()
 
-        data.waitingForConnect foreach (w ⇒ w.sender ! ConnectionFailed(w.request, failure))
+        data.waitingForConnect foreach (w ⇒ w handleFailure failure)
 
         data.copy(waitingForConnect = Set.empty)
     }
@@ -117,10 +149,10 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
     private def connectionEstablishedState(conn: Connection, sess: Session, data: fsm.Data) = {
         cancelWaitConnectTimers()
 
-        val connAct = context.actorOf(ConnectionActor.props(conn, sess), "conn")
+        val connAct = context.actorOf(ConnectionActor.props(conn, sess, self), "conn")
         context watch connAct
 
-        data.waitingForConnect foreach (w ⇒ w.sender ! ConnectionEstablished(w.request, self))
+        data.waitingForConnect foreach (w ⇒ w handleSuccess connAct)
 
         data.copy(waitingForConnect = Set.empty, connection = Some(connAct))
     }
@@ -132,9 +164,13 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
             // only need to explicitly handle if we're in idle (start connecting) or connected (immediately respond)
             stay() using data.copy(waitingForConnect = data.waitingForConnect + getConnectWaiter(req))
 
+        case Event(op: ConnectedOperation, data) ⇒
+            // only need to explicitly handle if we're in idle (start connecting) or connected (immediately respond)
+            stay() using data.copy(waitingForConnect = data.waitingForConnect + getOperationWaiter(op))
+
         case Event(WaiterTimedOut(reqId), data) ⇒
             (data.waitingForConnect find (_.reqId == reqId)).fold(stay())(waiter ⇒ {
-                waiter.sender ! ConnectionFailed(waiter.request, ConnectionTimedOut)
+                waiter handleFailure ConnectionTimedOut
                 stay() using data.copy(waitingForConnect = data.waitingForConnect - waiter)
             })
 
@@ -152,11 +188,14 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
         case Event(Terminated(act), data) if data isAListener act ⇒
             stay() using (data withoutListener act)
-    }
+   }
 
     when(fsm.Idle, config.connFactTimeout) {
         case Event(req: ConnectionRequest, data) ⇒
             goto(fsm.Connecting) using data.copy(waitingForConnect = data.waitingForConnect + getConnectWaiter(req))
+
+        case Event(op: ConnectedOperation, data) ⇒
+            goto(fsm.Connecting) using data.copy(waitingForConnect = data.waitingForConnect + getOperationWaiter(op))
 
         case Event(StateTimeout, _) ⇒
             log.debug("Idle for {}, shutting down", config.connFactTimeout)
@@ -185,6 +224,10 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
     when(fsm.Connected) {
         case Event(req: ConnectionRequest, _) ⇒ stay() replying ConnectionEstablished(req, self)
+
+        case Event(op: ConnectedOperation, data) ⇒
+            data.connection foreach (_ forward op)
+            stay()
 
         case Event(CloseConnection, data) ⇒ goto(fsm.Closing)
 
