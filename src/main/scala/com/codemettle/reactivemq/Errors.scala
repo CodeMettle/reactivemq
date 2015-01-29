@@ -14,3 +14,6 @@ import scala.util.control.NoStackTrace
  *
  */
 case object ConnectionTimedOut extends Exception("Connection timed out") with NoStackTrace
+
+case object ConnectionClosedWhileReconnecting
+    extends Exception("User closed connection while in disconnected state") with NoStackTrace

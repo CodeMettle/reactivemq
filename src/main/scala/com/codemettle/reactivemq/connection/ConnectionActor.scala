@@ -45,7 +45,8 @@ class ConnectionActor(conn: Connection, session: Session) extends Actor with Act
 
     def receive = {
         case ConnectionException(e) ⇒
-            log.error(e, "error")
+            log.error(e, "Exception; closing connection")
+            context stop self
 
         case CloseConnection ⇒ self ! PoisonPill
     }

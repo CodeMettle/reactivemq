@@ -41,4 +41,17 @@ object ReActiveMQMessages {
 
     @SerialVersionUID(1L)
     case object CloseConnection
+
+    @SerialVersionUID(1L)
+    case object SubscribeToConnections
+
+    sealed trait ConnectionStatusMessage {
+        def connectionActor: ActorRef
+    }
+
+    @SerialVersionUID(1L)
+    case class ConnectionInterrupted(connectionActor: ActorRef) extends ConnectionStatusMessage
+
+    @SerialVersionUID(1L)
+    case class ConnectionReestablished(connectionActor: ActorRef) extends ConnectionStatusMessage
 }
