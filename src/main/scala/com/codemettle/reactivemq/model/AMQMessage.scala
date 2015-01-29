@@ -7,7 +7,7 @@
  */
 package com.codemettle.reactivemq.model
 
-import java.{util => ju}
+import java.{io => jio, util => ju}
 import javax.jms.{Message, ObjectMessage, TextMessage}
 
 import org.apache.activemq.command.{ActiveMQObjectMessage, ActiveMQTextMessage}
@@ -19,7 +19,7 @@ import scala.collection.JavaConverters._
  *
  */
 @SerialVersionUID(1L)
-case class AMQMessage(body: Any, headers: Map[String, Any]) {
+case class AMQMessage(body: Any, headers: Map[String, Any] = Map.empty) {
     def jmsMessage = {
         val msg = body match {
             case s: String ⇒
@@ -27,7 +27,7 @@ case class AMQMessage(body: Any, headers: Map[String, Any]) {
                 msg setText s
                 msg
 
-            case s: Serializable ⇒
+            case s: jio.Serializable ⇒
                 val msg = new ActiveMQObjectMessage
                 msg setObject s
                 msg

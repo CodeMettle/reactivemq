@@ -1,7 +1,7 @@
 /*
  * ConnectionFactoryActor.scala
  *
- * Updated: Jan 28, 2015
+ * Updated: Jan 29, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -9,7 +9,7 @@ package com.codemettle.reactivemq
 package connection
 
 import java.util.UUID
-import javax.jms.{Connection, Session}
+import javax.jms.{JMSException, ExceptionListener, Connection, Session}
 
 import org.apache.activemq.ActiveMQConnectionFactory
 
@@ -100,6 +100,12 @@ object ConnectionFactoryActor {
     private case class WaiterTimedOut(reqId: UUID)
     private case class OpenedConnection(conn: Connection, sess: Session)
     private case object ReestablishConnection
+
+    private[connection] case class ConnectionException(e: JMSException)
+
+    private class Listener(act: ActorRef) extends ExceptionListener {
+        override def onException(exception: JMSException): Unit = act ! ConnectionException(exception)
+    }
 }
 
 private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFactory) extends FSM[fsm.State, fsm.Data] with Stash {
@@ -150,6 +156,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
         cancelWaitConnectTimers()
 
         val connAct = context.actorOf(ConnectionActor.props(conn, sess, self), "conn")
+        conn setExceptionListener new Listener(connAct)
         context watch connAct
 
         data.waitingForConnect foreach (w ⇒ w handleSuccess connAct)
