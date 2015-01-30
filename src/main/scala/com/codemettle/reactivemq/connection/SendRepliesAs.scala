@@ -21,11 +21,11 @@ private[connection] trait SendRepliesAs {
 
     protected def sendRepliesAs: ActorRef
 
-    protected def routeFuture[T](to: ActorRef)(f: ⇒ Future[T]) = {
+    protected def routeFutureFromSRA[T](to: ActorRef)(f: ⇒ Future[T]) = {
         f.pipeTo(to)(sendRepliesAs)
     }
 
     protected implicit class SendReply(val u: ActorRef) {
-        def tellAs(msg: Any) = u.tell(msg, sendRepliesAs)
+        def tellFromSRA(msg: Any) = u.tell(msg, sendRepliesAs)
     }
 }

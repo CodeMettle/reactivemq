@@ -37,9 +37,10 @@ class ConnectionActor(conn: Connection, protected val session: Session, protecte
     }
 
     def receive = handleDestinationMessages orElse handleProducerMessages orElse handleConsumerMessages orElse {
-        case m@SendMessage(dest, msg, timeout) ⇒
-            routeFuture(sender()) {
-                getProducer(dest) map (prod ⇒ prod send msg.jmsMessage(session))
+        case SendMessage(dest, msg, ttl, timeout) ⇒
+            routeFutureFromSRA(sender()) {
+                val props = msg.properties
+                getProducer(dest) map (prod ⇒ prod.send(msg.jmsMessage(session), props.deliveryMode, props.priority, ttl))
             }
 
         case ConnectionException(e) ⇒

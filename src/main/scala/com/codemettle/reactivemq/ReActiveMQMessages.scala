@@ -62,8 +62,8 @@ object ReActiveMQMessages {
     }
 
     @SerialVersionUID(1L)
-    case class SendMessage(to: Destination, message: AMQMessage, timeout: FiniteDuration = 10.seconds)
-        extends ConnectedOperation
+    case class SendMessage(to: Destination, message: AMQMessage, timeToLive: Long = 0,
+                           timeout: FiniteDuration = 10.seconds) extends ConnectedOperation
 
     sealed trait ConsumerMessage {
         def destination: Destination

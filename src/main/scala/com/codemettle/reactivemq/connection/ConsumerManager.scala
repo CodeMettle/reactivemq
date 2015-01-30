@@ -87,7 +87,7 @@ object ConsumerManager {
                     checkIdle()
                 }
 
-            case msg: AMQMessage ⇒ subscribers foreach (_ tellAs msg)
+            case msg: AMQMessage ⇒ subscribers foreach (_ tellFromSRA msg)
         }
     }
 

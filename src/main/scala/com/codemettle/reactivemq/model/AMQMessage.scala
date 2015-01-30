@@ -69,9 +69,10 @@ object AMQMessage {
 
 case class JMSMessageProperties(messageID: Option[String] = None, timestamp: Long = 0,
                                 correlationID: Option[String] = None, replyTo: Option[Destination] = None,
-                                destination: Option[Destination] = None, deliveryMode: Int = 0,
-                                redelivered: Boolean = false, `type`: Option[String] = None, expiration: Long = 0,
-                                priority: Int = 0)
+                                destination: Option[Destination] = None,
+                                deliveryMode: Int = Message.DEFAULT_DELIVERY_MODE, redelivered: Boolean = false,
+                                `type`: Option[String] = None, expiration: Long = 0,
+                                priority: Int = Message.DEFAULT_PRIORITY)
 
 object JMSMessageProperties {
     def from(msg: Message) = {
