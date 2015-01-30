@@ -7,17 +7,16 @@
  */
 package com.codemettle.reactivemq.connection
 
-import javax.jms.{Destination => JMSDestination, _}
+import javax.jms
 
 import com.codemettle.reactivemq.ReActiveMQMessages.ConsumerMessage
 import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.connection.ConsumerManager._
-import com.codemettle.reactivemq.model.Queue
-import com.codemettle.reactivemq.model.Topic
 import com.codemettle.reactivemq.model._
 
 import akka.actor._
 import akka.pattern.pipe
+import scala.util.Try
 import scala.util.control.Exception.ignoring
 
 /**
@@ -26,13 +25,13 @@ import scala.util.control.Exception.ignoring
  */
 object ConsumerManager {
 
-    private class DestinationConsumer(session: Session, dest: Destination, protected val sendRepliesAs: ActorRef)
+    private class DestinationConsumer(session: jms.Session, dest: Destination, protected val sendRepliesAs: ActorRef)
         extends Actor with SendRepliesAs with ActorLogging {
         import context.dispatcher
 
         private val config = ReActiveMQConfig(context.system)
 
-        private var consumer = Option.empty[MessageConsumer]
+        private var consumer = Option.empty[jms.MessageConsumer]
         private var subscribers = Set.empty[ActorRef]
 
         private var idleTimer = Option.empty[Cancellable]
@@ -88,18 +87,24 @@ object ConsumerManager {
                 }
 
             case msg: AMQMessage ⇒ subscribers foreach (_ tellFromSRA msg)
+
+            case TranslateError(t, msg) ⇒ log.error(t, "Couldn't decode {}", msg)
         }
     }
 
     private object DestinationConsumer {
-        def props(session: Session, dest: Destination, sendRepliesAs: ActorRef) = {
+        def props(session: jms.Session, dest: Destination, sendRepliesAs: ActorRef) = {
             Props(new DestinationConsumer(session, dest, sendRepliesAs))
         }
     }
 
-    private class MsgListener(sendTo: ActorRef) extends MessageListener {
-        override def onMessage(message: Message): Unit = {
-            sendTo ! (AMQMessage from message)
+    private case class TranslateError(t: Throwable, message: jms.Message)
+
+    private class MsgListener(sendTo: ActorRef) extends jms.MessageListener {
+        override def onMessage(message: jms.Message): Unit = {
+            sendTo ! (Try(AMQMessage from message) recover {
+                case t ⇒ TranslateError(t, message)
+            }).get
         }
     }
 
@@ -107,14 +112,14 @@ object ConsumerManager {
 
     private case object AddSubscriber
     private case class GetDestAndConsumers(dest: Destination)
-    private case class DestAndConsumers(jmsDest: JMSDestination, consumers: Set[ActorRef])
+    private case class DestAndConsumers(jmsDest: jms.Destination, consumers: Set[ActorRef])
 }
 
 trait ConsumerManager extends Actor {
     this: DestinationManager with SendRepliesAs with ActorLogging ⇒
     import context.dispatcher
 
-    protected def session: Session
+    protected def session: jms.Session
 
     private var consumerActors = Map.empty[Destination, ActorRef]
     private var consumers = Map.empty[Destination, Set[ActorRef]]
