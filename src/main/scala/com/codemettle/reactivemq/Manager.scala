@@ -10,7 +10,7 @@ package com.codemettle.reactivemq
 import org.apache.activemq.ActiveMQConnectionFactory
 
 import com.codemettle.reactivemq.Manager.ConnectionKey
-import com.codemettle.reactivemq.ReActiveMQMessages.{ConnectionRequest, GetAuthenticatedConnection, GetConnection}
+import com.codemettle.reactivemq.ReActiveMQMessages.{AutoConnect, ConnectionRequest, GetAuthenticatedConnection, GetConnection}
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor
 
 import akka.actor._
@@ -29,7 +29,7 @@ object Manager {
     private case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)])
 }
 
-class Manager extends Actor {
+class Manager extends Actor with ActorLogging {
     private var connectionFactories = Map.empty[ConnectionKey, ActorRef]
 
     private val connFactName = Iterator from 0 map (i ⇒ s"Connection${base64(i)}")
@@ -42,9 +42,15 @@ class Manager extends Actor {
             }
 
             val name = staticName.fold(connFactName.next())(identity)
+
+            log.debug("Creating ConnectionFactory to {} with name {}", key.brokerUrl, name)
+
             val act = context.actorOf(ConnectionFactoryActor.props(connFact), name)
+
             context watch act
+
             connectionFactories += (key → act)
+
             act
         })
     }
@@ -57,6 +63,9 @@ class Manager extends Actor {
     }
 
     def receive = {
+        case req@AutoConnect(brokerUrl, name) ⇒
+            openConnection(ConnectionKey(brokerUrl, None), req)
+
         case req@GetConnection(brokerUrl, _, _) ⇒
             openConnection(ConnectionKey(brokerUrl, None), req)
 

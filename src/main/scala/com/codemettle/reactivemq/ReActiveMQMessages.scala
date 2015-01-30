@@ -22,6 +22,12 @@ object ReActiveMQMessages {
         def staticActorName: Option[String]
     }
 
+    private[reactivemq] case class AutoConnect(brokerUrl: String, connName: String) extends ConnectionRequest {
+        override def timeout: FiniteDuration = Long.MaxValue.nanos
+
+        override def staticActorName: Option[String] = Some(connName)
+    }
+
     @SerialVersionUID(1L)
     case class GetConnection(brokerUrl: String, staticActorName: Option[String] = None,
                              timeout: FiniteDuration = 10.seconds) extends ConnectionRequest

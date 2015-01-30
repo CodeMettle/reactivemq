@@ -222,6 +222,10 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
    }
 
     when(fsm.Idle, config.connFactTimeout) {
+        case Event(req: AutoConnect, data) ⇒
+            openConnection() pipeTo self
+            goto(fsm.Reconnecting) using data.copy(reconnectInFlight = true) replying ConnectionEstablished(req, self)
+
         case Event(req: ConnectionRequest, data) ⇒
             goto(fsm.Connecting) using data.copy(waitingForConnect = data.waitingForConnect + getConnectWaiter(req))
 

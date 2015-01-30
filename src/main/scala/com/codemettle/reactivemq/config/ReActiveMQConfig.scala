@@ -11,6 +11,7 @@ package config
 import com.typesafe.config.Config
 import spray.util.SettingsCompanion
 
+import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -19,7 +20,7 @@ import scala.concurrent.duration.FiniteDuration
  */
 case class ReActiveMQConfig(connFactTimeout: FiniteDuration, reestablishConnections: Boolean,
                             connectionReestablishPeriod: FiniteDuration, producerIdleTimeout: FiniteDuration,
-                            consumerIdleTimeout: FiniteDuration)
+                            consumerIdleTimeout: FiniteDuration, autoConnections: Map[String, String])
 
 object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq") {
     override def fromSubConfig(c: Config): ReActiveMQConfig = {
@@ -28,7 +29,8 @@ object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq"
             c getBoolean        "reestablish-broken-connections",
             c getFiniteDuration "reestablish-attempt-delay",
             c getFiniteDuration "close-unused-producers-after",
-            c getFiniteDuration "close-unused-consumers-after"
+            c getFiniteDuration "close-unused-consumers-after",
+            (c.getObject("autoconnect").unwrapped().asScala mapValues (_.toString)).toMap
         )
     }
 }
