@@ -12,7 +12,7 @@ Camel provides a plethora of components, and can be used with JMS/ActiveMQ, and 
 
 #### What about (insert-jms-provider-here)?
 
-ReActiveMQ only uses JMS code, except to create the ActiveMQConnectionFactory and ActiveMQMessages. If desired, ActiveMQ support can easily be moved into an optional library and other providers could be added. Make a feature request!
+ReActiveMQ only uses JMS code, except to create the `ActiveMQConnectionFactory` and `ActiveMQMessage`s. If desired, ActiveMQ support can easily be moved into an optional library and other providers could be added. Make a feature request!
 
 
 Import
@@ -100,7 +100,7 @@ Auto-connect:
 
 Configure autoconnects in `application.conf`:
 
-```json
+```JSON
 reactivemq {
   autoconnect {
     myConn = "nio://blah:61616"
