@@ -38,7 +38,7 @@ private[connection] trait ProducerManager extends Actor {
         producers.values foreach (prod ⇒ ignoring(classOf[Exception])(prod.close()))
     }
 
-    private val config = ReActiveMQConfig(spray.util.actorSystem)
+    private val config = ReActiveMQConfig(context.system)
 
     private var prodReqs = Map.empty[Destination, List[Promise[MessageProducer]]]
     private var producers = Map.empty[Destination, MessageProducer]

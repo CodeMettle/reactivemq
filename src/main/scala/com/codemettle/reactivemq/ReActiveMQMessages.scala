@@ -7,7 +7,7 @@
  */
 package com.codemettle.reactivemq
 
-import com.codemettle.reactivemq.model.{Destination, AMQMessage}
+import com.codemettle.reactivemq.model.{AMQMessage, Destination, Queue, Topic}
 
 import akka.actor.ActorRef
 import scala.concurrent.duration._
@@ -64,4 +64,22 @@ object ReActiveMQMessages {
     @SerialVersionUID(1L)
     case class SendMessage(to: Destination, message: AMQMessage, timeout: FiniteDuration = 10.seconds)
         extends ConnectedOperation
+
+    sealed trait ConsumerMessage {
+        def destination: Destination
+    }
+
+    @SerialVersionUID(1L)
+    case class ConsumeFromTopic(name: String) extends ConsumerMessage {
+        @transient lazy val destination = Topic(name)
+    }
+
+    @SerialVersionUID(1L)
+    case class ConsumeFromQueue(name: String) extends ConsumerMessage {
+        @transient lazy val destination = Queue(name)
+    }
+
+    @SerialVersionUID(1L)
+    case class Consume(destination: Destination) extends ConsumerMessage
+
 }

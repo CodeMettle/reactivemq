@@ -47,21 +47,35 @@ object ConnectionFactoryActor {
 
             def withConnectionListener(act: ActorRef) = copy(subscriptions = subscriptions withConnectionListener act)
 
+            def withConsumer(act: ActorRef, consume: Consume) = {
+                copy(subscriptions = subscriptions.withConsumer(act, consume))
+            }
+
             def withoutListener(act: ActorRef) = copy(subscriptions = subscriptions withoutListener act)
         }
     }
 
-    private[connection] case class Subscriptions(connectionListeners: Set[ActorRef] = Set.empty) {
+    private[connection] case class Subscriptions(connectionListeners: Set[ActorRef] = Set.empty,
+                                                 consumers: Map[ActorRef, Set[Consume]] = Map.empty) {
         def withConnectionListener(act: ActorRef) = {
             if (connectionListeners(act)) this else copy(connectionListeners = connectionListeners + act)
         }
 
+        def withConsumer(act: ActorRef, consume: Consume) = {
+            if (consumers get act exists (_ contains consume))
+                this
+            else {
+                val newSet = consumers.getOrElse(act, Set.empty) + consume
+                copy(consumers = consumers + (act → newSet))
+            }
+        }
+
         def isAListener(act: ActorRef) = {
-            connectionListeners(act)
+            connectionListeners(act) || consumers.keySet(act)
         }
 
         private def removeListener(act: ActorRef) = {
-            copy(connectionListeners = connectionListeners - act)
+            copy(connectionListeners = connectionListeners - act, consumers = consumers - act)
         }
 
         def withoutListener(act: ActorRef) = {
@@ -113,7 +127,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
     startWith(fsm.Idle, fsm.Data())
 
-    private val config = ReActiveMQConfig(spray.util.actorSystem)
+    private val config = ReActiveMQConfig(context.system)
 
     private def getConnectWaiter(req: ConnectionRequest) = {
         val waiter = WaitingForConnection(sender(), req)
@@ -161,6 +175,10 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
         data.waitingForConnect foreach (w ⇒ w handleSuccess connAct)
 
+        data.subscriptions.consumers foreach {
+            case (requestor, consumeSubs) ⇒ consumeSubs foreach (c ⇒ connAct.tell(c, requestor))
+        }
+
         data.copy(waitingForConnect = Set.empty, connection = Some(connAct))
     }
 
@@ -174,6 +192,10 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
         case Event(op: ConnectedOperation, data) ⇒
             // only need to explicitly handle if we're in idle (start connecting) or connected (immediately respond)
             stay() using data.copy(waitingForConnect = data.waitingForConnect + getOperationWaiter(op))
+
+        case Event(consume: ConsumerMessage, data) ⇒
+            // explicitly handled in the already-connected state
+            stay() using data.withConsumer(sender(), Consume(consume.destination))
 
         case Event(WaiterTimedOut(reqId), data) ⇒
             (data.waitingForConnect find (_.reqId == reqId)).fold(stay())(waiter ⇒ {
@@ -194,6 +216,8 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
             stay() using (data withConnectionListener sender())
 
         case Event(Terminated(act), data) if data isAListener act ⇒
+            // may not be a consumer, but won't hurt to send
+            data.connection foreach (_ ! ConsumerManager.ConsumerTerminated(act))
             stay() using (data withoutListener act)
    }
 
@@ -236,6 +260,11 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
             data.connection foreach (_ forward op)
             stay()
 
+        case Event(consume: ConsumerMessage, data) ⇒
+            val c = Consume(consume.destination)
+            data.connection foreach (_ forward c)
+            stay() using data.withConsumer(sender(), c)
+
         case Event(CloseConnection, data) ⇒ goto(fsm.Closing)
 
         case Event(Terminated(act), data) if data.connection contains act ⇒
@@ -253,7 +282,8 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
     onTransition {
         case fsm.Connected -> fsm.Closing ⇒ stateData.connection foreach (_ ! CloseConnection)
-        case fsm.Connected -> fsm.Reconnecting ⇒ setTimer("reestablish", ReestablishConnection, config.connectionReestablishPeriod)
+        case fsm.Connected -> fsm.Reconnecting ⇒
+            setTimer("reestablish", ReestablishConnection, config.connectionReestablishPeriod)
     }
 
     when(fsm.Closing) {

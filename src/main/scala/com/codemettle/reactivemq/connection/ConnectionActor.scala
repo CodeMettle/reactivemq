@@ -13,8 +13,6 @@ import com.codemettle.reactivemq.ReActiveMQMessages.{CloseConnection, SendMessag
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor.ConnectionException
 
 import akka.actor._
-import akka.pattern.pipe
-import scala.concurrent.Future
 import scala.util.control.Exception.ignoring
 
 /**
@@ -27,8 +25,8 @@ object ConnectionActor {
     }
 }
 
-class ConnectionActor(conn: Connection, protected val session: Session, sendRepliesAs: ActorRef)
-    extends Actor with DestinationManager with ProducerManager with ActorLogging {
+class ConnectionActor(conn: Connection, protected val session: Session, protected val sendRepliesAs: ActorRef)
+    extends Actor with DestinationManager with ProducerManager with ConsumerManager with SendRepliesAs with ActorLogging {
     import context.dispatcher
 
     override def postStop() = {
@@ -38,14 +36,10 @@ class ConnectionActor(conn: Connection, protected val session: Session, sendRepl
         ignoring(classOf[Exception])(conn.close())
     }
 
-    private def routeFuture[T](to: ActorRef)(f: ⇒ Future[T]) = {
-        f.pipeTo(to)(sendRepliesAs)
-    }
-
-    def receive = handleDestinationMessages orElse handleProducerMessages orElse {
+    def receive = handleDestinationMessages orElse handleProducerMessages orElse handleConsumerMessages orElse {
         case m@SendMessage(dest, msg, timeout) ⇒
             routeFuture(sender()) {
-                getProducer(dest) map (prod ⇒ prod send msg.jmsMessage)
+                getProducer(dest) map (prod ⇒ prod send msg.jmsMessage(session))
             }
 
         case ConnectionException(e) ⇒

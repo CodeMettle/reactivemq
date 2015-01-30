@@ -10,7 +10,7 @@ package com.codemettle.reactivemq.connection
 import javax.jms.{Destination => JMSDestination, Session}
 
 import com.codemettle.reactivemq.connection.DestinationManager.{CreateFailure, DestinationCreated}
-import com.codemettle.reactivemq.model.{Destination, Queue, Topic}
+import com.codemettle.reactivemq.model._
 
 import akka.actor.{Actor, ActorLogging}
 import akka.pattern.pipe
@@ -37,6 +37,8 @@ private[connection] trait DestinationManager extends Actor {
     private def createDestination(dest: Destination) = {
         (Future {
             dest match {
+                case tt: TempTopic ⇒ tt.jmsDest
+                case tq: TempQueue ⇒ tq.jmsDest
                 case Topic(name) ⇒ session createTopic name
                 case Queue(name) ⇒ session createQueue name
             }
