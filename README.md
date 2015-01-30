@@ -56,7 +56,7 @@ Maven:
 Usage
 -----
 
-Create a connection:
+##### Create a connection:
 
 ```scala
 import com.codemettle.reactivemq._
@@ -69,7 +69,7 @@ ReActiveMQExtension(system).manager ! GetConnection("nio://esb:61616")
 //  ConnectionFailed(request, reason)
 ```
 
-Consume from AMQ:
+##### Consume from AMQ:
 
 ```scala
 connectionActor ! ConsumeFromQueue("queueName")
@@ -79,7 +79,7 @@ connectionActor ! Consume(Queue("queueName"))
 // sender of the consume message receives AMQMessage(body, properties, headers) messages
 ```
 
-Send messages:
+##### Send messages:
 
 ```scala
 connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
@@ -87,7 +87,7 @@ connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
 // sender receives Unit, or a Status.Failure(reason)
 ```
 
-Request reply:
+##### Request reply:
 
 ```scala
 // or use ask/? to get a future of the response
@@ -96,11 +96,11 @@ connectionActor ! RequestMessage(Queue("name"), AMQMessage(body))
 // sender receives the response, or a Status.Failure(reason)
 ```
 
-Auto-connect:
+##### Auto-connect:
 
 Configure autoconnects in `application.conf`:
 
-```JSON
+```
 reactivemq {
   autoconnect {
     myConn = "nio://blah:61616"
