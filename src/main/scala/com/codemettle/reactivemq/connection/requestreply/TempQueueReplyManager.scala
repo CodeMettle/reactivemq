@@ -33,7 +33,7 @@ class TempQueueReplyManager(tempQueue: TempQueue, connection: ActorRef) extends 
     override def preStart() = {
         super.preStart()
 
-        connection ! Consume(tempQueue)
+        connection ! Consume(tempQueue, sharedConsumer = false)
     }
 
     def receive = {

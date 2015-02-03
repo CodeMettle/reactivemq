@@ -9,14 +9,16 @@ package com.codemettle.reactivemq.connection
 
 import javax.jms
 
-import com.codemettle.reactivemq.ReActiveMQMessages.ConsumerMessage
+import com.codemettle.reactivemq.ReActiveMQMessages._
 import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.connection.ConsumerManager._
 import com.codemettle.reactivemq.model._
 
 import akka.actor._
+import akka.event.Logging
 import akka.pattern.pipe
-import scala.util.Try
+import akka.util.Helpers
+import scala.util.{Failure, Success, Try}
 import scala.util.control.Exception.ignoring
 
 /**
@@ -25,16 +27,38 @@ import scala.util.control.Exception.ignoring
  */
 object ConsumerManager {
 
-    private class DestinationConsumer(session: jms.Session, dest: Destination, protected val sendRepliesAs: ActorRef)
-        extends Actor with SendRepliesAs with ActorLogging {
-        import context.dispatcher
+    private trait ConsumerActor extends Actor with ActorLogging {
+        protected def session: jms.Session
+        protected def dest: Destination
 
-        private val config = ReActiveMQConfig(context.system)
+        private def config = ReActiveMQConfig(context.system)
+        private val subLogLevel = if (config.logConsumers) Logging.InfoLevel else Logging.DebugLevel
 
-        private var consumer = Option.empty[jms.MessageConsumer]
+        protected def logConsumer(sub: ActorRef) = {
+            log.log(subLogLevel, "Subscribing {} to {}", sub, dest)
+        }
+
+        protected var consumer = Option.empty[jms.MessageConsumer]
+
+        protected val msgListener = new MsgListener(self)
+
+        protected def silentlyClose() = {
+            consumer foreach (cons ⇒ {
+                ignoring(classOf[Exception])(cons.close())
+            })
+        }
+
+        protected def createConsumer(jmsDest: jms.Destination) = {
+            val cons = session createConsumer jmsDest
+            cons setMessageListener msgListener
+            consumer = Some(cons)
+        }
+    }
+
+    private class SharedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination, protected val sendRepliesAs: ActorRef)
+        extends Actor with SendRepliesAs with ConsumerActor with ActorLogging {
+
         private var subscribers = Set.empty[ActorRef]
-
-        private var idleTimer = Option.empty[Cancellable]
 
         override def preStart() = {
             super.preStart()
@@ -45,17 +69,7 @@ object ConsumerManager {
         override def postStop() = {
             super.postStop()
 
-            consumer foreach (cons ⇒ {
-                ignoring(classOf[Exception])(cons.close())
-            })
-
-            idleTimer foreach (_.cancel())
-        }
-
-        private def checkIdle() = {
-            idleTimer foreach (_.cancel())
-            if (subscribers.isEmpty)
-                idleTimer = Some(context.system.scheduler.scheduleOnce(config.consumerIdleTimeout, self, PoisonPill))
+            silentlyClose()
         }
 
         private def subscribe(subs: Iterable[ActorRef]): Unit = {
@@ -63,28 +77,23 @@ object ConsumerManager {
                 if (!subscribers.contains(sub)) {
                     context watch sub
                     subscribers += sub
-                    log.debug(s"Subscribing {} to {}", sub, dest)
+
+                    logConsumer(sub)
                 }
             })
         }
 
         def receive = {
             case DestAndConsumers(jmsDest, consumers) ⇒
-                val cons = session createConsumer jmsDest
-                cons setMessageListener new MsgListener(self)
-                consumer = Some(cons)
+                createConsumer(jmsDest)
                 subscribe(consumers)
-                checkIdle()
 
-            case AddSubscriber ⇒
-                subscribe(Iterable(sender()))
-                checkIdle()
+            case AddSubscriber ⇒ subscribe(Iterable(sender()))
 
             case Terminated(act) ⇒
-                if (subscribers contains act) {
-                    subscribers -= act
-                    checkIdle()
-                }
+                subscribers -= act
+                if (subscribers.isEmpty)
+                    context stop self
 
             case msg: AMQMessage ⇒ subscribers foreach (_ tellFromSRA msg)
 
@@ -92,9 +101,57 @@ object ConsumerManager {
         }
     }
 
-    private object DestinationConsumer {
+    private object SharedDestinationConsumer {
         def props(session: jms.Session, dest: Destination, sendRepliesAs: ActorRef) = {
-            Props(new DestinationConsumer(session, dest, sendRepliesAs))
+            Props(new SharedDestinationConsumer(session, dest, sendRepliesAs))
+        }
+    }
+
+    private class DedicatedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination,
+                                               subscriber: ActorRef, protected val sendRepliesAs: ActorRef)
+        extends Actor with SendRepliesAs with ConsumerActor with ActorLogging {
+        override def preStart() = {
+            super.preStart()
+
+            context watch subscriber
+        }
+
+        override def postStop() = {
+            super.postStop()
+
+            // cleanup in case the subscriber shutdown without ending subscription
+            silentlyClose()
+        }
+
+        def receive = {
+            case DestAndConsumers(jmsDest, _) ⇒ consumer match {
+                case Some(_) ⇒ subscriber ! ConsumeSuccess(dest)
+                case None ⇒ Try {
+                    createConsumer(jmsDest)
+                } match {
+                    case Success(_) ⇒ subscriber ! ConsumeSuccess(dest)
+                    case Failure(t) ⇒
+                        subscriber ! ConsumeFailed(dest, t)
+                        context stop self
+                }
+            }
+
+            case _: EndConsumption ⇒
+                silentlyClose()
+                subscriber ! ConsumptionEnded(dest)
+                context stop self
+
+            case Terminated(`subscriber`) ⇒ context stop self
+
+            case msg: AMQMessage ⇒ subscriber tellFromSRA msg
+
+            case TranslateError(t, msg) ⇒ log.error(t, "Couldn't decode {}", msg)
+        }
+    }
+
+    private object DedicatedDestinationConsumer {
+        def props(session: jms.Session, dest: Destination, subscriber: ActorRef, sendRepliesAs: ActorRef) = {
+            Props(new DedicatedDestinationConsumer(session, dest, subscriber, sendRepliesAs))
         }
     }
 
@@ -121,32 +178,58 @@ trait ConsumerManager extends Actor {
 
     protected def session: jms.Session
 
-    private var consumerActors = Map.empty[Destination, ActorRef]
-    private var consumers = Map.empty[Destination, Set[ActorRef]]
+    private var sharedConsumerActors = Map.empty[Destination, ActorRef]
+    private var sharedConsumerSubscriptions = Map.empty[Destination, Set[ActorRef]]
 
-    private def getSingleConsumer(forDest: Destination): ActorRef = {
-        consumerActors.getOrElse(forDest, {
-            val name = (forDest match {
-                case _: Queue ⇒ "queue-"
-                case _: Topic ⇒ "topic-"
-                case _: TempQueue ⇒ "tempqueue-"
-                case _: TempTopic ⇒ "temptopic-"
-            }) + forDest.name
+    private var dedicatedConsumers = Map.empty[(Destination, ActorRef), ActorRef]
 
-            val act = context.actorOf(DestinationConsumer.props(session, forDest, sendRepliesAs), name)
+    private val dedicatedNamer = Iterator from 0 map (i ⇒ Helpers.base64(i))
+
+    private def destName(dest: Destination) = {
+        val namePre = dest match {
+            case _: Queue ⇒ "queue-"
+            case _: Topic ⇒ "topic-"
+            case _: TempQueue ⇒ "tempqueue-"
+            case _: TempTopic ⇒ "temptopic-"
+        }
+
+        namePre + dest.name
+    }
+
+    private def getSharedConsumer(forDest: Destination): ActorRef = {
+        sharedConsumerActors.getOrElse(forDest, {
+            val name = "shared-" + destName(forDest)
+
+            val act = context.actorOf(SharedDestinationConsumer.props(session, forDest, sendRepliesAs), name)
             context watch act
-            consumerActors += (forDest → act)
+            sharedConsumerActors += (forDest → act)
+            act
+        })
+    }
+
+    private def getDedicatedConsumer(forDest: Destination): ActorRef = {
+        dedicatedConsumers.getOrElse(forDest → sender(), {
+            val name = destName(forDest) + dedicatedNamer.next()
+
+            val act = context.actorOf(DedicatedDestinationConsumer.props(session, forDest, sender(), sendRepliesAs), name)
+            context watch act
+            dedicatedConsumers += ((forDest → sender()) → act)
             act
         })
     }
 
     protected def handleConsumerMessages: Receive = {
-        case Terminated(act) if consumerActors.values.exists(_ == act) ⇒
-            log.debug("{} shut down due to idle timeout", act)
-            consumerActors find (_._2 == act) foreach (e ⇒ consumerActors -= e._1)
+        case Terminated(act) if sharedConsumerActors.values.exists(_ == act) ⇒
+            log.debug("{} shut down", act)
+            sharedConsumerActors find (_._2 == act) foreach (e ⇒ sharedConsumerActors -= e._1)
+
+        case Terminated(act) if dedicatedConsumers.values.exists(_ == act) ⇒
+            log.debug("{} shut down", act)
+            dedicatedConsumers find (_._2 == act) foreach (e ⇒ dedicatedConsumers -= e._1)
 
         case ConsumerTerminated(act) ⇒
-            consumers = (Map.empty[Destination, Set[ActorRef]] /: consumers) {
+            // don't need to stop the actors because they watch subscribers and do it themselves
+            sharedConsumerSubscriptions = (Map.empty[Destination, Set[ActorRef]] /: sharedConsumerSubscriptions) {
                 case (acc, (dest, subs)) ⇒
                     val newSet = subs - act
                     if (newSet.nonEmpty)
@@ -155,14 +238,28 @@ trait ConsumerManager extends Actor {
                         acc
             }
 
-        case cm: ConsumerMessage ⇒
-            val newSet = consumers.getOrElse(cm.destination, Set.empty) + sender()
-            consumers += (cm.destination → newSet)
+            dedicatedConsumers = dedicatedConsumers filterNot (_._1._2 == act)
 
-            getSingleConsumer(cm.destination) forward AddSubscriber
+        case cm: ConsumerMessage if cm.sharedConsumer ⇒
+            val newSet = sharedConsumerSubscriptions.getOrElse(cm.destination, Set.empty) + sender()
+            sharedConsumerSubscriptions += (cm.destination → newSet)
+
+            getSharedConsumer(cm.destination) forward AddSubscriber
+
+        case cm: ConsumerMessage ⇒
+            val consumer = getDedicatedConsumer(cm.destination)
+            val subscriber = sender()
+            getDestination(cm.destination) onComplete {
+                case Failure(t) ⇒ subscriber ! ConsumeFailed(cm.destination, t)
+                case Success(jmsDest) ⇒ consumer ! DestAndConsumers(jmsDest, Set.empty)
+            }
+
+        case ec@EndConsumption(dest) ⇒
+            val key = dest → sender()
+            dedicatedConsumers.get(key).fold(sender() ! ConsumptionEnded(dest))(_ forward ec)
 
         case GetDestAndConsumers(dest) ⇒
-            val cons = consumers.getOrElse(dest, Set.empty)
+            val cons = sharedConsumerSubscriptions.getOrElse(dest, Set.empty)
             getDestination(dest) map (d ⇒ DestAndConsumers(d, cons)) pipeTo sender()
     }
 }

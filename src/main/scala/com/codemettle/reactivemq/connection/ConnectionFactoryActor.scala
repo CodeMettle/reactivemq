@@ -51,6 +51,10 @@ object ConnectionFactoryActor {
                 copy(subscriptions = subscriptions.withConsumer(act, consume))
             }
 
+            def withoutConsumer(act: ActorRef, consume: Consume) = {
+                copy(subscriptions = subscriptions.withoutConsumer(act, consume))
+            }
+
             def withoutListener(act: ActorRef) = copy(subscriptions = subscriptions withoutListener act)
         }
     }
@@ -68,6 +72,17 @@ object ConnectionFactoryActor {
                 val newSet = consumers.getOrElse(act, Set.empty) + consume
                 copy(consumers = consumers + (act → newSet))
             }
+        }
+
+        def withoutConsumer(act: ActorRef, consume: Consume) = {
+            if (consumers get act exists (_ contains consume)) {
+                val newSet = consumers(act) - consume
+                if (newSet.nonEmpty)
+                    copy(consumers = consumers + (act → newSet))
+                else
+                    copy(consumers = consumers - act)
+            } else
+                this
         }
 
         def isAListener(act: ActorRef) = {
@@ -195,7 +210,11 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
         case Event(consume: ConsumerMessage, data) ⇒
             // explicitly handled in the already-connected state
-            stay() using data.withConsumer(sender(), Consume(consume.destination))
+            stay() using data.withConsumer(sender(), Consume(consume.destination, consume.sharedConsumer))
+
+        case Event(EndConsumption(dest), data) ⇒
+            // only need to actually do anything with this in connected state
+            stay() using data.withoutConsumer(sender(), Consume(dest, sharedConsumer = false)) replying ConsumptionEnded(dest)
 
         case Event(WaiterTimedOut(reqId), data) ⇒
             (data.waitingForConnect find (_.reqId == reqId)).fold(stay())(waiter ⇒ {
@@ -265,9 +284,13 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
             stay()
 
         case Event(consume: ConsumerMessage, data) ⇒
-            val c = Consume(consume.destination)
+            val c = Consume(consume.destination, consume.sharedConsumer)
             data.connection foreach (_ forward c)
             stay() using data.withConsumer(sender(), c)
+
+        case Event(ec@EndConsumption(dest), data) ⇒
+            data.connection foreach (_ forward ec)
+            stay() using data.withoutConsumer(sender(), Consume(dest, sharedConsumer = false))
 
         case Event(CloseConnection, data) ⇒ goto(fsm.Closing)
 

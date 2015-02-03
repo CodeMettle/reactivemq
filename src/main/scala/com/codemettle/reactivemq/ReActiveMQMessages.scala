@@ -75,21 +75,48 @@ object ReActiveMQMessages {
     case class RequestMessage(to: Destination, message: AMQMessage, timeout: FiniteDuration = 20.seconds)
         extends ConnectedOperation
 
-    sealed trait ConsumerMessage {
+    sealed trait ConsumerMessage extends Equals {
         def destination: Destination
+        def sharedConsumer: Boolean
+
+        override def canEqual(that: Any): Boolean = that.isInstanceOf[ConsumerMessage]
+
+        override def equals(obj: scala.Any): Boolean = obj match {
+            case that: ConsumerMessage ⇒ (that canEqual this) && this.destination == that.destination &&
+                this.sharedConsumer == that.sharedConsumer
+
+            case _ ⇒ false
+        }
     }
 
     @SerialVersionUID(1L)
-    case class ConsumeFromTopic(name: String) extends ConsumerMessage {
+    case class ConsumeFromTopic(name: String, sharedConsumer: Boolean = true) extends ConsumerMessage {
         @transient lazy val destination = Topic(name)
     }
 
     @SerialVersionUID(1L)
-    case class ConsumeFromQueue(name: String) extends ConsumerMessage {
+    case class ConsumeFromQueue(name: String, sharedConsumer: Boolean = false) extends ConsumerMessage {
         @transient lazy val destination = Queue(name)
     }
 
     @SerialVersionUID(1L)
-    case class Consume(destination: Destination) extends ConsumerMessage
+    case class Consume(destination: Destination, sharedConsumer: Boolean) extends ConsumerMessage
 
+    // non-shared consumers
+    sealed trait DedicatedConsumerNotif {
+        def destination: Destination
+    }
+
+    @SerialVersionUID(1L)
+    case class ConsumeFailed(destination: Destination, error: Throwable) extends DedicatedConsumerNotif
+
+    @SerialVersionUID(1L)
+    case class ConsumeSuccess(destination: Destination) extends DedicatedConsumerNotif
+
+    @SerialVersionUID(1L)
+    case class EndConsumption(destination: Destination)
+
+    @SerialVersionUID(1L)
+    case class ConsumptionEnded(destination: Destination)
+    // end non-shared consumers
 }
