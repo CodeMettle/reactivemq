@@ -222,7 +222,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
                 stay() using data.copy(waitingForConnect = data.waitingForConnect - waiter)
             })
 
-        case Event(SubscribeToConnections, data) ⇒
+        case Event(SubscribeToConnectionStatus, data) ⇒
             context watch sender()
 
             sender() ! {

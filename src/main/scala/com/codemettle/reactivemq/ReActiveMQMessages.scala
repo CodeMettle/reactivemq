@@ -51,7 +51,7 @@ object ReActiveMQMessages {
     case object CloseConnection
 
     @SerialVersionUID(1L)
-    case object SubscribeToConnections
+    case object SubscribeToConnectionStatus
 
     sealed trait ConnectionStatusMessage {
         def connectionActor: ActorRef

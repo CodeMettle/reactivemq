@@ -10,6 +10,7 @@ import sbt._
 
 object Deps {
     val activemqBroker = "org.apache.activemq" % "activemq-broker" % Versions.activemq
+    val activemqCamel = "org.apache.activemq" % "activemq-camel" % Versions.activemq
     val activemqClient = "org.apache.activemq" % "activemq-client" % Versions.activemq
     val akkaActor = "com.typesafe.akka" %% "akka-actor" % Versions.akka
     val akkaCamel = "com.typesafe.akka" %% "akka-camel" % Versions.akka

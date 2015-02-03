@@ -50,6 +50,7 @@ libraryDependencies ++= Seq(
 
 libraryDependencies ++= Seq(
     Deps.activemqBroker,
+    Deps.activemqCamel,
     Deps.akkaCamel,
     Deps.akkaSlf,
     Deps.akkaTest,
