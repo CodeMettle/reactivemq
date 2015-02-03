@@ -18,7 +18,7 @@ import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
 import com.codemettle.reactivemq.ReActiveMQMessages._
-import com.codemettle.reactivemq.VmBrokerTests.{logLevel, testConfig}
+import com.codemettle.reactivemq.VmBrokerTests.{nonErrorLogging, logLevel, testConfig}
 import com.codemettle.reactivemq.model.{AMQMessage, JMSMessageProperties, Queue, Topic}
 
 import akka.actor._
@@ -53,7 +53,10 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
     private def setLogging(): Unit = {
         Try {
-            LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext].getLogger(Logger.ROOT_LOGGER_NAME).setLevel(logLevel)
+            val lc = LoggerFactory.getILoggerFactory.asInstanceOf[LoggerContext]
+            lc.getLogger(Logger.ROOT_LOGGER_NAME).setLevel(logLevel)
+            if (!nonErrorLogging)
+                lc.getLogger("com.codemettle.reactivemq.connection.ConnectionActor").setLevel(Level.OFF)
         } match {
             case Success(_) ⇒
             case Failure(_) ⇒
@@ -116,9 +119,29 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         conn ! CloseConnection
     }
 
+    class ConnectionListener(conn: ActorRef) {
+        val probe = TestProbe()
+
+        probe.send(conn, SubscribeToConnectionStatus)
+
+        def waitForConnection() = probe.expectMsgType[ConnectionReestablished]
+
+        def waitForDisconnect() = probe.expectMsgType[ConnectionInterrupted]
+
+        def done() = system stop probe.ref
+    }
+
     "ReActiveMQ" should "connect" in {
         val conn = getConnection
         closeConnection(conn)
+    }
+
+    it should "error on invalid URL" in {
+        val probe = TestProbe()
+
+        probe.send(manager, GetConnection(s"tcp://localhost:7"))
+
+        probe.expectMsgType[ConnectionFailed]
     }
 
     it should "have stable connection names" in {
@@ -313,6 +336,97 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         cons ! PoisonPill
 
         probe.expectMsgType[Terminated]
+
+        closeConnection(conn)
+    }
+
+    it should "properly set ttl" in {
+        val conn = getConnection
+
+        val receiver = TestProbe()
+        receiver.send(conn, ConsumeFromQueue("ttl"))
+        receiver.expectMsgType[ConsumeSuccess]
+
+        val sender = TestProbe()
+        val now = System.currentTimeMillis()
+        sender.send(conn, SendMessage(Queue("ttl"), AMQMessage("hi"), timeToLive = 500))
+
+        val msg = receiver.expectMsgType[AMQMessage]
+
+        msg.properties.expiration should be ((now + 500) +- 10)
+
+        system stop receiver.ref
+
+        closeConnection(conn)
+    }
+
+    it should "properly set ttl in request/reply" in {
+        val conn = getConnection
+
+        val receiver = TestProbe()
+        receiver.send(conn, ConsumeFromQueue("ttl2"))
+        receiver.expectMsgType[ConsumeSuccess]
+
+        val sender = TestProbe()
+        val now = System.currentTimeMillis()
+        sender.send(conn, RequestMessage(Queue("ttl2"), AMQMessage("hi"), 500.millis))
+        sender.expectMsgType[Status.Failure]
+
+        val msg = receiver.expectMsgType[AMQMessage]
+
+        msg.properties.expiration should be ((now + 500) +- 10)
+
+        system stop receiver.ref
+
+        closeConnection(conn)
+    }
+
+    it should "time out sends while disconnected" in {
+        val conn = getConnection
+
+        val probe = TestProbe()
+
+        val listener = new ConnectionListener(conn)
+        listener.waitForConnection()
+
+        stopBroker()
+
+        listener.waitForDisconnect()
+
+        probe.send(conn, SendMessage(Queue("x"), AMQMessage("hi"), timeout = 150.millis))
+
+        probe.expectMsgType[Status.Failure].cause.getMessage should equal ("Connection timed out")
+
+        startBroker()
+
+        listener.done()
+
+        closeConnection(conn)
+    }
+
+    it should "time out request/reply while disconnected" in {
+        val conn = getConnection
+
+        val probe = TestProbe()
+
+        val listener = new ConnectionListener(conn)
+        listener.waitForConnection()
+
+        stopBroker()
+
+        listener.waitForDisconnect()
+
+        probe.send(conn, RequestMessage(Queue("x"), AMQMessage("hi"), timeout = 150.millis))
+
+        probe.expectMsgType[Status.Failure].cause.getMessage should equal ("Connection timed out")
+
+        startBroker()
+
+        Thread.sleep(50)
+
+        getConnection
+
+        listener.done()
 
         closeConnection(conn)
     }
