@@ -69,13 +69,29 @@ ReActiveMQExtension(system).manager ! GetConnection("nio://esb:61616")
 //  ConnectionFailed(request, reason)
 ```
 
+Connections can be named:
+
+```scala
+ReActiveMQExtension(system).manager ! GetConnection("nio://esb:61616", Some("myName"))
+
+/* .... */
+
+val connSel = context.actorSelection("/user/reActiveMQ/myName")
+```
+
+Connections can be authenticated:
+
+```scala
+ReActiveMQExtension(system).manager ! GetAuthenticatedConnection("nio://esb:61616", "user", "pass")
+```
+
 ##### Close connections:
 
 ```scala
 connectionActor ! CloseConnection
 ```
 
-The `connectionActor` will stay alive and valid, maintaining established subscriptions, until `reactivemq.idle-connection-factory-shutdown` time has elapsed. A new `GetConnection` will re-use the `connectionActor` until the idle shutdown, after which a new connection will be created in response to a `GetConnection`.
+The `connectionActor` will stay alive and valid, maintaining established subscriptions, until `reactivemq.idle-connection-factory-shutdown` time has elapsed. A new `GetConnection` will re-use the `connectionActor` until the idle shutdown, after which a new connection will be created in response to a `GetConnection`. If a connection is reestablished before the timeout ends, then any actors that are still alive and had previously subscribed to connection status or consumed from queues/topics will be re-subscribed.
 
 ##### Consume from AMQ:
 
@@ -131,8 +147,9 @@ def receive = {
     case ConnectionReestablished(connectionActor: ActorRef) =>
 }
 
-// ConnectionReestablished messages will also be sent from standard connections newly established with GetConnection
-//  that had previously been closed, but not closed long enough for connection cleanup
+// ConnectionReestablished messages will also be sent from standard connections newly
+//  established with GetConnection that had previously been closed, but not closed
+//  long enough for connection cleanup
 ```
 
 ##### Auto-connect:
@@ -163,6 +180,7 @@ Plans
 -----
 
 * More examples for using the library; more information in README
+* Async sending
 * Needs unit tests
 * Support akka-streams, consume queues/topics as Sources, and send messages as Sinks
 * Easier actor traits, like akka-camel, to create Consumers
