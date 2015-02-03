@@ -19,7 +19,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import com.codemettle.reactivemq.ReActiveMQMessages._
 import com.codemettle.reactivemq.VmBrokerTests.{logLevel, testConfig}
-import com.codemettle.reactivemq.model.{AMQMessage, JMSMessageProperties, Queue}
+import com.codemettle.reactivemq.model.{AMQMessage, JMSMessageProperties, Queue, Topic}
 
 import akka.actor._
 import akka.camel.{CamelExtension, CamelMessage, Consumer}
@@ -206,6 +206,75 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         cons ! PoisonPill
 
         probe.expectMsgType[Terminated]
+
+        closeConnection(conn)
+    }
+
+    it should "support consuming from topics" in {
+        val conn = getConnection
+
+        val probe1 = TestProbe()
+        val probe2 = TestProbe()
+
+        probe1.send(conn, ConsumeFromTopic("sharedtopic"))
+        probe2.send(conn, Consume(Topic("sharedtopic"), sharedConsumer = true))
+
+        Thread.sleep(250)
+
+        CamelExtension(system).template.sendBody("embedded:topic:sharedtopic", "topic test")
+
+        probe1.expectMsgType[AMQMessage].body should equal ("topic test")
+        probe2.expectMsgType[AMQMessage].body should equal ("topic test")
+
+        system stop probe1.ref
+        system stop probe2.ref
+
+        closeConnection(conn)
+    }
+
+    it should "support consuming from topics (dedicated)" in {
+        val conn = getConnection
+
+        val probe1 = TestProbe()
+        val probe2 = TestProbe()
+
+        probe1.send(conn, ConsumeFromTopic("sharedtopic2", sharedConsumer = false))
+        probe2.send(conn, Consume(Topic("sharedtopic2"), sharedConsumer = false))
+
+        probe1.expectMsg(ConsumeSuccess(Topic("sharedtopic2")))
+        probe2.expectMsg(ConsumeSuccess(Topic("sharedtopic2")))
+
+        CamelExtension(system).template.sendBody("embedded:topic:sharedtopic2", "topic test")
+
+        probe1.expectMsgType[AMQMessage].body should equal ("topic test")
+        probe2.expectMsgType[AMQMessage].body should equal ("topic test")
+
+        system stop probe1.ref
+        system stop probe2.ref
+
+        closeConnection(conn)
+    }
+
+    it should "support consuming from queues" in {
+        val conn = getConnection
+
+        val probe1 = TestProbe()
+        val probe2 = TestProbe()
+
+        probe1.send(conn, ConsumeFromQueue("q1"))
+        probe2.send(conn, Consume(Queue("q2"), sharedConsumer = false))
+
+        probe1.expectMsg(ConsumeSuccess(Queue("q1")))
+        probe2.expectMsg(ConsumeSuccess(Queue("q2")))
+
+        CamelExtension(system).template.sendBody("embedded:q1", "queue test")
+        CamelExtension(system).template.sendBody("embedded:q2", "queue test")
+
+        probe1.expectMsgType[AMQMessage].body should equal ("queue test")
+        probe2.expectMsgType[AMQMessage].body should equal ("queue test")
+
+        system stop probe1.ref
+        system stop probe2.ref
 
         closeConnection(conn)
     }
