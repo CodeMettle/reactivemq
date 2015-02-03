@@ -13,7 +13,4 @@ object Versions {
     val scalaTest = "2.2.1"
     val slf4j = "1.7.7"
     val spray = "1.3.2"
-
-//    val ficus2_10 = "1.0.1"
-//    val ficus2_11 = "1.1.1"
 }

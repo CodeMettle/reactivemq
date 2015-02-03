@@ -1,0 +1,19 @@
+<!--
+  ~ logback.xml
+  ~
+  ~ Updated: Feb 3, 2015
+  ~
+  ~ Copyright (c) 2015, CodeMettle
+  -->
+<configuration scan="true">
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <withJansi>true</withJansi>
+        <encoder>
+            <pattern>%boldYellow(%d) %magenta([%15.15thread]) %highlight(%-5level) %green([%30.-30logger{30}]) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="debug">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>
