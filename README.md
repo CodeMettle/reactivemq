@@ -69,15 +69,39 @@ ReActiveMQExtension(system).manager ! GetConnection("nio://esb:61616")
 //  ConnectionFailed(request, reason)
 ```
 
+##### Close connections:
+
+```scala
+connectionActor ! CloseConnection
+```
+
+The `connectionActor` will stay alive and valid, maintaining established subscriptions, until `reactivemq.idle-connection-factory-shutdown` time has elapsed. A new `GetConnection` will re-use the `connectionActor` until the idle shutdown, after which a new connection will be created in response to a `GetConnection`.
+
 ##### Consume from AMQ:
 
 ```scala
-connectionActor ! ConsumeFromQueue("queueName")
-connectionActor ! ConsumeFromTopic("topicName")
-connectionActor ! Consume(Queue("queueName"))
+connectionActor ! ConsumeFromQueue("queueName") // shared defaults to true, but can be overridden
+connectionActor ! ConsumeFromTopic("topicName") // shared defaults to false, but can be overridden
+connectionActor ! Consume(Queue("queueName"), sharedConsumer = false)
+connectionActor ! Consume(Topic("topicName"), sharedConsumer = true)
 
 // sender of the consume message receives AMQMessage(body, properties, headers) messages
+// for non-shared, the sender additionally receives status messages (see below)
 ```
+
+###### Shared consumers
+
+By default, consuming from topics opens up 1 consumer in ActiveMQ, and broadcasts all received messages to all subscribers, but consumers established with `sharedConsumer` set to false will open multiple subscribers in ActiveMQ.
+
+By default, consuming from queues opens up 1 consumer per subscriber in ActiveMQ, but can be shared by setting `sharedConsumer` to `true` (which, of course, makes all consumers receive all messages instead of ActiveMQ's behavior of load balancing between multiple queue consumers).
+
+###### Dedicated (non-shared) consumers
+
+Any consumer created as dedicated (`sharedConsumer = false`) gets status messages about the consumer state, and, additionally, is allowed to end its dedicated subscriptions without stopping (useful for cleanly shutting down).
+
+Upon subscribing, the subscriber will receive a `ConsumeSuccess(Destination)` message, or a `ConsumeFailed(Destination, Throwable)` message. If auto-reconnect is enabled, and the connection is interrupted and reestablished, then ReActiveMQ will attempt to reestablish all consumers (shared and dedicated alike), and dedicated consumers will receive new `ConsumeSuccess`/`ConsumeFailed` messages.
+
+To stop a dedicated consumer subscription, send an `EndConsumption(Destination)` message to the connection actor from the subscribing actor. When the consumer is closed, the subscriber will be sent a `ConsumptionEnded(Destination)` message.
 
 ##### Send messages:
 
@@ -94,6 +118,21 @@ connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
 connectionActor ! RequestMessage(Queue("name"), AMQMessage(body))
 
 // sender receives the response, or a Status.Failure(reason)
+```
+
+##### Connection status notifications:
+
+```scala
+connectionActor ! SubscribeToConnectionStatus
+
+def receive = {
+    case ConnectionInterrupted(connectionActor: ActorRef) =>
+
+    case ConnectionReestablished(connectionActor: ActorRef) =>
+}
+
+// ConnectionReestablished messages will also be sent from standard connections newly established with GetConnection
+//  that had previously been closed, but not closed long enough for connection cleanup
 ```
 
 ##### Auto-connect:
