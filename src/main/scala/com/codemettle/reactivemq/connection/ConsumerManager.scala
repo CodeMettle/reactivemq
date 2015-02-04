@@ -1,7 +1,7 @@
 /*
  * ConsumerManager.scala
  *
- * Updated: Jan 29, 2015
+ * Updated: Feb 4, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -32,10 +32,15 @@ object ConsumerManager {
         protected def dest: Destination
 
         private def config = ReActiveMQConfig(context.system)
-        private val subLogLevel = if (config.logConsumers) Logging.InfoLevel else Logging.DebugLevel
+        private val queueSubLogLevel = if (config.logConsumers) Logging.InfoLevel else Logging.DebugLevel
 
         protected def logConsumer(sub: ActorRef) = {
-            log.log(subLogLevel, "Subscribing {} to {}", sub, dest)
+            val logLevel = dest match {
+                case _: Queue ⇒ queueSubLogLevel
+                case _ ⇒ Logging.DebugLevel
+            }
+
+            log.log(logLevel, "Subscribed {} to {}", sub, dest)
         }
 
         protected var consumer = Option.empty[jms.MessageConsumer]
@@ -55,7 +60,8 @@ object ConsumerManager {
         }
     }
 
-    private class SharedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination, protected val sendRepliesAs: ActorRef)
+    private class SharedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination,
+                                            protected val sendRepliesAs: ActorRef)
         extends Actor with SendRepliesAs with ConsumerActor with ActorLogging {
 
         private var subscribers = Set.empty[ActorRef]
@@ -129,12 +135,19 @@ object ConsumerManager {
                 case None ⇒ Try {
                     createConsumer(jmsDest)
                 } match {
-                    case Success(_) ⇒ subscriber ! ConsumeSuccess(dest)
-                    case Failure(t) ⇒
-                        subscriber ! ConsumeFailed(dest, t)
-                        context stop self
+                    case Success(_) ⇒ self ! ConsumeSuccess(dest)
+                    case Failure(t) ⇒ self ! ConsumeFailed(dest, t)
                 }
             }
+
+            case ConsumeSuccess(_) ⇒
+                subscriber ! ConsumeSuccess(dest)
+                logConsumer(subscriber)
+
+            case ConsumeFailed(_, t) ⇒
+                log.error(t, "Error consuming from {} for {}", dest, subscriber)
+                subscriber ! ConsumeFailed(dest, t)
+                context stop self
 
             case _: EndConsumption ⇒
                 silentlyClose()
