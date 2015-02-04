@@ -34,13 +34,16 @@ object ConsumerManager {
         private def config = ReActiveMQConfig(context.system)
         private val queueSubLogLevel = if (config.logConsumers) Logging.InfoLevel else Logging.DebugLevel
 
-        protected def logConsumer(sub: ActorRef) = {
+        protected def logConsumer(sub: ActorRef, unsubscribe: Boolean) = {
             val logLevel = dest match {
                 case _: Queue ⇒ queueSubLogLevel
                 case _ ⇒ Logging.DebugLevel
             }
 
-            log.log(logLevel, "Subscribed {} to {}", sub, dest)
+            if (unsubscribe)
+                log.log(logLevel, "Unsubscribed {} from {}", sub, dest)
+            else
+                log.log(logLevel, "Subscribed {} to {}", sub, dest)
         }
 
         protected var consumer = Option.empty[jms.MessageConsumer]
@@ -84,7 +87,7 @@ object ConsumerManager {
                     context watch sub
                     subscribers += sub
 
-                    logConsumer(sub)
+                    logConsumer(sub, unsubscribe = false)
                 }
             })
         }
@@ -97,6 +100,9 @@ object ConsumerManager {
             case AddSubscriber ⇒ subscribe(Iterable(sender()))
 
             case Terminated(act) ⇒
+                if (subscribers contains act)
+                    logConsumer(act, unsubscribe = true)
+
                 subscribers -= act
                 if (subscribers.isEmpty)
                     context stop self
@@ -125,6 +131,8 @@ object ConsumerManager {
         override def postStop() = {
             super.postStop()
 
+            consumer foreach (_ ⇒ logConsumer(subscriber, unsubscribe = true))
+
             // cleanup in case the subscriber shutdown without ending subscription
             silentlyClose()
         }
@@ -142,7 +150,7 @@ object ConsumerManager {
 
             case ConsumeSuccess(_) ⇒
                 subscriber ! ConsumeSuccess(dest)
-                logConsumer(subscriber)
+                logConsumer(subscriber, unsubscribe = false)
 
             case ConsumeFailed(_, t) ⇒
                 log.error(t, "Error consuming from {} for {}", dest, subscriber)
