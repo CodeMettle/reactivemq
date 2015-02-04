@@ -1,7 +1,7 @@
 /*
  * VmBrokerTests.scala
  *
- * Updated: Feb 3, 2015
+ * Updated: Feb 4, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -377,6 +377,46 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         msg.properties.expiration should be ((now + 500) +- 10)
 
         system stop receiver.ref
+
+        closeConnection(conn)
+    }
+
+    class TestQueueConsumer(qName: String, protected val connection: ActorRef) extends QueueConsumer {
+        override protected def consumeFrom = Queue(qName)
+
+        override def receive = {
+            case AMQMessage(msg: String, _, _) ⇒ sender() ! msg.reverse
+            case AMQMessage(msg: jl.Integer, _, _) ⇒ sender() ! Int.box(0 - msg.intValue())
+            case msg: AMQMessage ⇒ sender() ! AMQMessage(msg.headers("replyWith"), headers = Map("original" → msg.body))
+        }
+    }
+
+    it should "correctly respond to QueueConsumer messages" in {
+        val conn = getConnection
+
+        val cons = TestActorRef(new TestQueueConsumer("testQueueCons", conn))
+
+        val probe = TestProbe()
+
+        probe.send(conn, RequestMessage(Queue("testQueueCons"), AMQMessage("hello")))
+
+        probe.expectMsgType[AMQMessage].body should equal ("olleh")
+
+        probe.send(conn, RequestMessage(Queue("testQueueCons"), AMQMessage(3)))
+
+        probe.expectMsgType[AMQMessage].body should equal (-3)
+
+        probe.send(conn, RequestMessage(Queue("testQueueCons"), AMQMessage(true, headers = Map("replyWith" → "reply"))))
+
+        val msg = probe.expectMsgType[AMQMessage]
+        msg.body should equal ("reply")
+        msg.headers should contain key "original"
+        msg.headers("original") should equal (true)
+
+        probe watch cons
+        cons ! PoisonPill
+
+        probe.expectMsgType[Terminated]
 
         closeConnection(conn)
     }

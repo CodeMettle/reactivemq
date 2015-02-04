@@ -1,7 +1,7 @@
 /*
  * ReActiveMQConfig.scala
  *
- * Updated: Jan 28, 2015
+ * Updated: Feb 4, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -20,7 +20,8 @@ import scala.concurrent.duration.FiniteDuration
  */
 case class ReActiveMQConfig(connFactTimeout: FiniteDuration, reestablishConnections: Boolean,
                             connectionReestablishPeriod: FiniteDuration, producerIdleTimeout: FiniteDuration,
-                            logConsumers: Boolean, autoConnections: Map[String, String])
+                            logConsumers: Boolean, queueConsumerTimeout: FiniteDuration,
+                            autoConnections: Map[String, String])
 
 object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq") {
     override def fromSubConfig(c: Config): ReActiveMQConfig = {
@@ -30,6 +31,7 @@ object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq"
             c getFiniteDuration "reestablish-attempt-delay",
             c getFiniteDuration "close-unused-producers-after",
             c getBoolean        "log-consumers",
+            c getFiniteDuration "default-queue-consumer-reply-timeout",
             (c.getObject("autoconnect").unwrapped().asScala mapValues (_.toString)).toMap
         )
     }

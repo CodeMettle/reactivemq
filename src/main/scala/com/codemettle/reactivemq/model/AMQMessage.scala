@@ -1,11 +1,12 @@
 /*
  * AMQMessage.scala
  *
- * Updated: Jan 29, 2015
+ * Updated: Feb 4, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
-package com.codemettle.reactivemq.model
+package com.codemettle.reactivemq
+package model
 
 import java.{io => jio, util => ju}
 import javax.jms.{Session, Message, ObjectMessage, TextMessage}
@@ -49,6 +50,13 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
         msg.setJMSPriority(properties.priority)
 
         msg
+    }
+
+    def withCorrelationID(corr: String) = {
+        if (properties.correlationID contains corr)
+            this
+        else
+            copy(properties = properties.copy(correlationID = Some(corr)))
     }
 }
 
