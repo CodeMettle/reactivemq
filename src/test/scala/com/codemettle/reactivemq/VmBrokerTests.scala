@@ -383,7 +383,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     }
 
     class TestQueueConsumer(qName: String, val connection: ActorRef) extends QueueConsumer {
-        val consumeFrom = Queue(qName)
+        def consumeFrom = Queue(qName)
 
         def receive = {
             case AMQMessage(msg: String, _, _) ⇒ sender() ! msg.reverse
@@ -423,7 +423,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     }
 
     class TestTopicConsumer(tName: String, val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
-        val consumeFrom = Topic(tName)
+        def consumeFrom = Topic(tName)
 
         def receive = {
             case msg ⇒ probe.ref forward msg
