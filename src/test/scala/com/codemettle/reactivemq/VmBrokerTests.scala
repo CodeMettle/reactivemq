@@ -382,10 +382,10 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestQueueConsumer(qName: String, protected val connection: ActorRef) extends QueueConsumer {
-        override protected def consumeFrom = Queue(qName)
+    class TestQueueConsumer(qName: String, val connection: ActorRef) extends QueueConsumer {
+        val consumeFrom = Queue(qName)
 
-        override def receive = {
+        def receive = {
             case AMQMessage(msg: String, _, _) ⇒ sender() ! msg.reverse
             case AMQMessage(msg: jl.Integer, _, _) ⇒ sender() ! Int.box(0 - msg.intValue())
             case msg: AMQMessage ⇒ sender() ! AMQMessage(msg.headers("replyWith"), headers = Map("original" → msg.body))
@@ -422,10 +422,10 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestTopicConsumer(tName: String, protected val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
-        override protected def consumeFrom = Topic(tName)
+    class TestTopicConsumer(tName: String, val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
+        val consumeFrom = Topic(tName)
 
-        override def receive = {
+        def receive = {
             case msg ⇒ probe.ref forward msg
         }
     }
@@ -454,8 +454,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestOnewayProducer(protected val destination: Destination, protected val connection: ActorRef)
-        extends Producer with Oneway
+    class TestOnewayProducer(val destination: Destination, val connection: ActorRef) extends Producer with Oneway
 
     it should "allow Oneway Producers to send messages" in {
         val conn = getConnection
@@ -479,8 +478,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestOnewayStatusProducer(protected val destination: Destination, protected val connection: ActorRef)
-        extends Producer with Oneway {
+    class TestOnewayStatusProducer(val destination: Destination, val connection: ActorRef) extends Producer with Oneway {
         override protected def swallowSendStatus: Boolean = false
     }
 
@@ -506,7 +504,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestProducer(protected val destination: Destination, protected val connection: ActorRef) extends Producer
+    class TestProducer(val destination: Destination, val connection: ActorRef) extends Producer
 
     it should "allow request/reply Producers to send/receive messages" in {
         val conn = getConnection
@@ -539,8 +537,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    class TestTransformProducer(protected val destination: Destination, protected val connection: ActorRef) extends Producer {
-
+    class TestTransformProducer(val destination: Destination, val connection: ActorRef) extends Producer {
         override protected def transformOutgoingMessage(msg: Any): Any = msg match {
             case str: String ⇒ str.reverse
             case num: jl.Integer ⇒ 0 - num.intValue()

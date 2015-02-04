@@ -28,8 +28,8 @@ object Producer {
 trait Producer extends Actor with ActorLogging {
     import context.dispatcher
 
-    protected def connection: ActorRef
-    protected def destination: Destination
+    def connection: ActorRef
+    def destination: Destination
 
     protected def oneway: Boolean = false
 

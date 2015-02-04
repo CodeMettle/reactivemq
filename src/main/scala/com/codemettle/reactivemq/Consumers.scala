@@ -131,8 +131,8 @@ trait QueueConsumer extends Actor {
         QueueConsumerSubscriber.props(connection, consumeFrom, receiveConsumeNotifications, noExpirationReplyTimeout),
         "sub")
 
-    protected def connection: ActorRef
-    protected def consumeFrom: Queue
+    def connection: ActorRef
+    def consumeFrom: Queue
 
     /**
      * Override in an individual consumer to ignore the configured default
@@ -168,8 +168,8 @@ object TopicConsumer {
 }
 
 trait TopicConsumer extends Actor {
-    protected def connection: ActorRef
-    protected def consumeFrom: Topic
+    def connection: ActorRef
+    def consumeFrom: Topic
 
     context.actorOf(TopicConsumerSubscriber.props(connection, consumeFrom), "sub")
 }
