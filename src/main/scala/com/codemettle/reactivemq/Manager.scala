@@ -1,7 +1,7 @@
 /*
  * Manager.scala
  *
- * Updated: Jan 28, 2015
+ * Updated: Feb 4, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -26,7 +26,7 @@ object Manager {
         Props(new Manager)
     }
 
-    private case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)])
+    private case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)], staticName: Option[String])
 }
 
 class Manager extends Actor with ActorLogging {
@@ -64,13 +64,13 @@ class Manager extends Actor with ActorLogging {
 
     def receive = {
         case req@AutoConnect(brokerUrl, name) ⇒
-            openConnection(ConnectionKey(brokerUrl, None), req)
+            openConnection(ConnectionKey(brokerUrl, None, Some(name)), req)
 
-        case req@GetConnection(brokerUrl, _, _) ⇒
-            openConnection(ConnectionKey(brokerUrl, None), req)
+        case req@GetConnection(brokerUrl, staticName, _) ⇒
+            openConnection(ConnectionKey(brokerUrl, None, staticName), req)
 
-        case req@GetAuthenticatedConnection(brokerUrl, user, pass, _, _) ⇒
-            openConnection(ConnectionKey(brokerUrl, Some(user → pass)), req)
+        case req@GetAuthenticatedConnection(brokerUrl, user, pass, staticName, _) ⇒
+            openConnection(ConnectionKey(brokerUrl, Some(user → pass), staticName), req)
 
         case Terminated(act) ⇒ connectionFactories find (_._2 == act) foreach (kv ⇒ connectionFactories -= kv._1)
     }
