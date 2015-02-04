@@ -105,6 +105,28 @@ connectionActor ! Consume(Topic("topicName"), sharedConsumer = true)
 // for non-shared, the sender additionally receives status messages (see below)
 ```
 
+ReActiveMQ also has akka-camel-ish Consumer actors:
+
+```scala
+// it's important that connection and consumeFrom are defined as defs and not vals, unless in the constructor
+
+class MyTopicConsumer(val connection: ActorRef) extends TopicConsumer {
+    def consumeFrom = Topic("mytopic")
+
+    def receive = {
+        case msg: AMQMessage =>
+    }
+}
+
+class MyQueueConsumer(val consumeFrom: Queue) extends QueueConsumer {
+    def connection = ReActiveMQExtension(context.system) autoConnects "myconn"
+
+    def receive = {
+        case msg: AMQMessage =>
+    }
+}
+```
+
 ###### Shared consumers
 
 By default, consuming from topics opens up 1 consumer in ActiveMQ, and broadcasts all received messages to all subscribers, but consumers established with `sharedConsumer` set to false will open multiple subscribers in ActiveMQ.
@@ -127,6 +149,27 @@ connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
 // sender receives Unit, or a Status.Failure(reason)
 ```
 
+ReActiveMQ also has an akka-camel-ish Producer actor:
+
+```scala
+class MyProducer(val destination: Destination) extends Producer with Oneway
+
+class My2ndProducer extends Producer {
+    def destination = Topic("blah")
+
+    override protected def oneway = true
+}
+
+class My3rdProducer extends Producer with Oneway {
+    def destination = Queue("q")
+
+    override protected def transformOutgoingMessage(msg: Any) = msg match {
+        case str: String => str.reverse
+        case _ => msg
+    }
+}
+```
+
 ##### Request reply:
 
 ```scala
@@ -134,6 +177,17 @@ connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
 connectionActor ! RequestMessage(Queue("name"), AMQMessage(body))
 
 // sender receives the response, or a Status.Failure(reason)
+
+// ReActiveMQ also has an akka-camel-ish Producer actor
+
+class MyProducer extends Producer {
+    def destination = Queue("aQueue")
+}
+
+val prod = context.actorOf(Props[MyProducer])
+
+(prod ? "respond to this").mapTo[AMQMessage]
+(prod ? AMQMessage("body", JMSMessageProperties().copy(`type` = Some("myJmsType")))).mapTo[AMQMessage]
 ```
 
 ##### Connection status notifications:
