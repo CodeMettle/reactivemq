@@ -421,6 +421,38 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
+    class TestTopicConsumer(tName: String, protected val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
+        override protected def consumeFrom = Topic(tName)
+
+        override def receive = {
+            case msg ⇒ probe.ref forward msg
+        }
+    }
+
+    it should "allow TopicConsumers to receive messages" in {
+        val conn = getConnection
+
+        val probe1 = TestProbe()
+        val probe2 = TestProbe()
+
+        val cons1 = TestActorRef(new TestTopicConsumer("testTopicCons", conn, probe1))
+        val cons2 = TestActorRef(new TestTopicConsumer("testTopicCons", conn, probe2))
+
+        Thread.sleep(250)
+
+        CamelExtension(system).template.sendBody("embedded:topic:testTopicCons", "topic test")
+
+        probe1.expectMsgType[AMQMessage].body should equal ("topic test")
+        probe2.expectMsgType[AMQMessage].body should equal ("topic test")
+
+        system stop probe1.ref
+        system stop probe2.ref
+        system stop cons1
+        system stop cons2
+
+        closeConnection(conn)
+    }
+
     it should "time out sends while disconnected" in {
         val conn = getConnection
 

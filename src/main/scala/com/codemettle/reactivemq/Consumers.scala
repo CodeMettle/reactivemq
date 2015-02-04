@@ -1,5 +1,5 @@
 /*
- * QueueConsumer.scala
+ * Consumers.scala
  *
  * Updated: Feb 4, 2015
  *
@@ -11,8 +11,9 @@ import java.util.UUID
 
 import com.codemettle.reactivemq.QueueConsumer.QueueConsumerSubscriber
 import com.codemettle.reactivemq.ReActiveMQMessages.{Consume, ConsumeFailed, DedicatedConsumerNotif, SendMessage}
+import com.codemettle.reactivemq.TopicConsumer.TopicConsumerSubscriber
 import com.codemettle.reactivemq.config.ReActiveMQConfig
-import com.codemettle.reactivemq.model.{AMQMessage, Destination, Queue}
+import com.codemettle.reactivemq.model.{AMQMessage, Destination, Queue, Topic}
 
 import akka.actor._
 import scala.concurrent.duration._
@@ -142,4 +143,33 @@ trait QueueConsumer extends Actor {
      * Override in an individual consumer to receive ConsumeSuccess and ConsumeFailed messages
      */
     protected def receiveConsumeNotifications: Boolean = false
+}
+
+object TopicConsumer {
+
+    private class TopicConsumerSubscriber(connectionActor: ActorRef, dest: Topic) extends Actor {
+        override def preStart() = {
+            super.preStart()
+
+            connectionActor ! Consume(dest, sharedConsumer = true)
+        }
+
+        def receive = {
+            case msg: AMQMessage ⇒ context.parent forward msg
+        }
+    }
+
+    private object TopicConsumerSubscriber {
+        def props(connection: ActorRef, dest: Topic) = {
+            Props(new TopicConsumerSubscriber(connection, dest))
+        }
+    }
+
+}
+
+trait TopicConsumer extends Actor {
+    protected def connection: ActorRef
+    protected def consumeFrom: Topic
+
+    context.actorOf(TopicConsumerSubscriber.props(connection, consumeFrom), "sub")
 }
