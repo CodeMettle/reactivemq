@@ -17,9 +17,10 @@ import org.apache.activemq.store.memory.MemoryPersistenceAdapter
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
+import com.codemettle.reactivemq.Producer.Oneway
 import com.codemettle.reactivemq.ReActiveMQMessages._
 import com.codemettle.reactivemq.VmBrokerTests.{nonErrorLogging, logLevel, testConfig}
-import com.codemettle.reactivemq.model.{AMQMessage, JMSMessageProperties, Queue, Topic}
+import com.codemettle.reactivemq.model._
 
 import akka.actor._
 import akka.camel.{CamelExtension, CamelMessage, Consumer}
@@ -449,6 +450,129 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         system stop probe2.ref
         system stop cons1
         system stop cons2
+
+        closeConnection(conn)
+    }
+
+    class TestOnewayProducer(protected val destination: Destination, protected val connection: ActorRef)
+        extends Producer with Oneway
+
+    it should "allow Oneway Producers to send messages" in {
+        val conn = getConnection
+
+        val consumer = TestProbe()
+
+        consumer.send(conn, ConsumeFromQueue("oneway"))
+        consumer.expectMsgType[ConsumeSuccess]
+
+        val prod = TestActorRef(new TestOnewayProducer(Queue("oneway"), conn))
+
+        val probe2 = TestProbe()
+
+        probe2.send(prod, "test")
+        consumer.expectMsgType[AMQMessage].body should equal ("test")
+        probe2.expectNoMsg(500.millis)
+
+        system stop prod
+        system stop consumer.ref
+
+        closeConnection(conn)
+    }
+
+    class TestOnewayStatusProducer(protected val destination: Destination, protected val connection: ActorRef)
+        extends Producer with Oneway {
+        override protected def swallowSendStatus: Boolean = false
+    }
+
+    it should "allow Oneway Producers to send messages and return status" in {
+        val conn = getConnection
+
+        val consumer = TestProbe()
+
+        consumer.send(conn, ConsumeFromQueue("oneway"))
+        consumer.expectMsgType[ConsumeSuccess]
+
+        val prod = TestActorRef(new TestOnewayStatusProducer(Queue("oneway"), conn))
+
+        val probe2 = TestProbe()
+
+        probe2.send(prod, "status test")
+        consumer.expectMsgType[AMQMessage].body should equal ("status test")
+        probe2.expectMsgType[Unit]
+
+        system stop prod
+        system stop consumer.ref
+
+        closeConnection(conn)
+    }
+
+    class TestProducer(protected val destination: Destination, protected val connection: ActorRef) extends Producer
+
+    it should "allow request/reply Producers to send/receive messages" in {
+        val conn = getConnection
+
+        val qcons = TestActorRef(new TestQueueConsumer("prodrrtest", conn))
+
+        val prod = TestActorRef(new TestProducer(Queue("prodrrtest"), conn))
+
+        val probe = TestProbe()
+
+        probe.send(prod, "hello")
+
+        probe.expectMsgType[AMQMessage].body should equal ("olleh")
+
+        probe.send(prod, 3)
+
+        probe.expectMsgType[AMQMessage].body should equal (-3)
+
+        probe.send(prod, AMQMessage(true, headers = Map("replyWith" → "reply")))
+
+        val msg = probe.expectMsgType[AMQMessage]
+        msg.body should equal ("reply")
+        msg.headers should contain key "original"
+        msg.headers("original") should equal (true)
+
+        system stop prod
+
+        system stop qcons
+
+        closeConnection(conn)
+    }
+
+    class TestTransformProducer(protected val destination: Destination, protected val connection: ActorRef) extends Producer {
+
+        override protected def transformOutgoingMessage(msg: Any): Any = msg match {
+            case str: String ⇒ str.reverse
+            case num: jl.Integer ⇒ 0 - num.intValue()
+            case AMQMessage(_, _, headers) ⇒ AMQMessage(headers("newBody"))
+            case _ ⇒ msg
+        }
+    }
+
+    it should "allow producers to transform outgoing messages" in {
+        val conn = getConnection
+
+        val qcons = TestActorRef(new TestQueueConsumer("prodrrtest", conn))
+
+        val prod = TestActorRef(new TestTransformProducer(Queue("prodrrtest"), conn))
+
+        val probe = TestProbe()
+
+        probe.send(prod, "hello")
+
+        probe.expectMsgType[AMQMessage].body should equal ("hello")
+
+        probe.send(prod, 3)
+
+        probe.expectMsgType[AMQMessage].body should equal (3)
+
+        probe.send(prod, AMQMessage(true, headers = Map("newBody" → "reply")))
+
+        probe.expectMsgType[AMQMessage].body should equal ("ylper")
+
+        system stop prod
+
+        system stop qcons
 
         closeConnection(conn)
     }
