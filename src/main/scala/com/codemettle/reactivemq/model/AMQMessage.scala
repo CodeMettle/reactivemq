@@ -52,11 +52,14 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
         msg
     }
 
-    def withCorrelationID(corr: String) = {
-        if (properties.correlationID contains corr)
+    def withCorrelationID(corr: String) = withProperty(_.copy(correlationID = Some(corr)))
+
+    def withProperty(f: (JMSMessageProperties) ⇒ JMSMessageProperties) = {
+        val newProps = f(properties)
+        if (newProps == properties)
             this
         else
-            copy(properties = properties.copy(correlationID = Some(corr)))
+            copy(properties = newProps)
     }
 }
 
