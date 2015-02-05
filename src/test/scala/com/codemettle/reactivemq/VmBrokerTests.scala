@@ -89,7 +89,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         startBroker()
 
-        CamelExtension(system).context.addComponent("embedded", activeMQComponent(s"vm://$brokerName"))
+        CamelExtension(system).context.addComponent("embedded", activeMQComponent(s"vm://$brokerName?create=false"))
     }
 
     override protected def afterAll(): Unit = {
@@ -105,7 +105,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     private def getConnectionEstablished = {
         val probe = TestProbe()
 
-        probe.send(manager, GetConnection(s"vm://$brokerName", Some(brokerName)))
+        probe.send(manager, GetConnection(s"vm://$brokerName?create=false", Some(brokerName)))
 
         val connEst = probe.expectMsgType[ConnectionEstablished]
 
@@ -140,7 +140,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     it should "error on invalid URL" in {
         val probe = TestProbe()
 
-        probe.send(manager, GetConnection(s"tcp://localhost:7"))
+        probe.send(manager, GetConnection(s"vm://blah?create=false"))
 
         probe.expectMsgType[ConnectionFailed]
     }
