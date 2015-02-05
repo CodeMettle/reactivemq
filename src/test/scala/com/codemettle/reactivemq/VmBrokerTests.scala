@@ -350,11 +350,11 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         val sender = TestProbe()
         val now = System.currentTimeMillis()
-        sender.send(conn, SendMessage(Queue("ttl"), AMQMessage("hi"), timeToLive = 500))
+        sender.send(conn, SendMessage(Queue("ttl"), AMQMessage("hi"), timeToLive = 5000))
 
         val msg = receiver.expectMsgType[AMQMessage]
 
-        msg.properties.expiration should be ((now + 500) +- 10)
+        msg.properties.expiration should be ((now + 5000) +- 100)
 
         system stop receiver.ref
 
@@ -370,12 +370,12 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         val sender = TestProbe()
         val now = System.currentTimeMillis()
-        sender.send(conn, RequestMessage(Queue("ttl2"), AMQMessage("hi"), 500.millis))
+        sender.send(conn, RequestMessage(Queue("ttl2"), AMQMessage("hi"), 1.second))
         sender.expectMsgType[Status.Failure]
 
         val msg = receiver.expectMsgType[AMQMessage]
 
-        msg.properties.expiration should be ((now + 500) +- 10)
+        msg.properties.expiration should be ((now + 1000) +- 100)
 
         system stop receiver.ref
 
