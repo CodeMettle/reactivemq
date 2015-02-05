@@ -169,15 +169,15 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         testProbe.send(conn, SubscribeToConnectionStatus)
 
-        testProbe.expectMsg(ConnectionReestablished(conn))
+        testProbe.expectMsg(ConnectionReestablished(conn, initialStateNotification = true))
 
         stopBroker()
 
-        testProbe.expectMsg(ConnectionInterrupted(conn))
+        testProbe.expectMsg(ConnectionInterrupted(conn, initialStateNotification = false))
 
         startBroker()
 
-        testProbe.expectMsg(ConnectionReestablished(conn))
+        testProbe.expectMsg(ConnectionReestablished(conn, initialStateNotification = false))
 
         closeConnection(conn)
 
@@ -192,7 +192,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
             override def endpointUri: String = "embedded:recvtest"
 
             override def receive: Actor.Receive = {
-                case msg ⇒ receiver.ref ! msg
+                case m ⇒ receiver.ref ! m
             }
         })
 
