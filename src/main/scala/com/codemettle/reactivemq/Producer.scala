@@ -7,6 +7,7 @@
  */
 package com.codemettle.reactivemq
 
+import com.codemettle.reactivemq.Producer.LogError
 import com.codemettle.reactivemq.ReActiveMQMessages.{RequestMessage, SendMessage}
 import com.codemettle.reactivemq.model.{AMQMessage, Destination}
 
@@ -23,6 +24,8 @@ object Producer {
     trait Oneway extends Producer {
         override def oneway: Boolean = true
     }
+
+    private case class LogError(t: Throwable, msg: AMQMessage)
 }
 
 trait Producer extends Actor with ActorLogging {
@@ -51,6 +54,9 @@ trait Producer extends Actor with ActorLogging {
     protected def sendTimeout: FiniteDuration = 10.seconds
 
     final def receive = {
+        case LogError(t, msg) ⇒
+            log.error(t, "Error sending {}", msg)
+
         case msg ⇒
             val newMsg = transformOutgoingMessage(msg) match {
                 case amq: AMQMessage ⇒ amq
@@ -63,7 +69,7 @@ trait Producer extends Actor with ActorLogging {
                 if (swallowSendStatus) {
                     implicit val timeout = Timeout(sendTimeout + 5.seconds)
                     (connection ? sendMessage) onFailure {
-                        case t ⇒ log.error(t, "Error sending {}", newMsg)
+                        case t ⇒ self ! LogError(t, newMsg)
                     }
                 } else {
                     connection forward sendMessage
