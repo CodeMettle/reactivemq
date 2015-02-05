@@ -57,11 +57,17 @@ object ReActiveMQMessages {
         def connectionActor: ActorRef
     }
 
+    /**
+     * @param initialStateNotification set to true on the message sent after first subscribing to notifications
+     */
     @SerialVersionUID(1L)
-    case class ConnectionInterrupted(connectionActor: ActorRef) extends ConnectionStatusMessage
+    case class ConnectionInterrupted(connectionActor: ActorRef, initialStateNotification: Boolean) extends ConnectionStatusMessage
 
+    /**
+     * @param initialStateNotification set to true on the message sent after first subscribing to notifications
+     */
     @SerialVersionUID(1L)
-    case class ConnectionReestablished(connectionActor: ActorRef) extends ConnectionStatusMessage
+    case class ConnectionReestablished(connectionActor: ActorRef, initialStateNotification: Boolean) extends ConnectionStatusMessage
 
     sealed trait ConnectedOperation {
         def timeout: FiniteDuration

@@ -227,9 +227,9 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
             sender() ! {
                 if (stateData.connection.isDefined)
-                    ConnectionReestablished(self)
+                    ConnectionReestablished(self, initialStateNotification = true)
                 else
-                    ConnectionInterrupted(self)
+                    ConnectionInterrupted(self, initialStateNotification = true)
             }
 
             stay() using (data withConnectionListener sender())
@@ -296,7 +296,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
         case Event(Terminated(act), data) if data.connection contains act ⇒
             // an unexpected termination, since CloseConnection requests take us to the Closing state
-            val interruptMsg = ConnectionInterrupted(self)
+            val interruptMsg = ConnectionInterrupted(self, initialStateNotification = false)
             data.subscriptions.connectionListeners foreach (_ ! interruptMsg)
 
             if (config.reestablishConnections)
@@ -348,7 +348,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
             stay() using connectionFailedState(data, t).copy(reconnectInFlight = false)
 
         case Event(OpenedConnection(conn, sess), data) ⇒
-            val reconnMsg = ConnectionReestablished(self)
+            val reconnMsg = ConnectionReestablished(self, initialStateNotification = false)
             data.subscriptions.connectionListeners foreach (_ ! reconnMsg)
 
             unstashAll()
