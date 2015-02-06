@@ -43,12 +43,12 @@ Maven:
 <dependency>
     <groupId>org.apache.activemq</groupId>
     <artifactId>activemq-client</artifactId>
-    <version>4.5.1</version>
+    <version>version</version>
 </dependency>
 <dependency>
     <groupId>com.typesafe.akka</groupId>
     <artifactId>akka-actor</artifactId>
-    <version>2.3.9</version>
+    <version>version</version>
 </dependency>
 ```
 
@@ -253,7 +253,8 @@ Changelog
 * **0.5.0**
   * Initial Release
   * Support for major JMS operations in an actor+message passing interface
-  * Support for building immutable messages that represent messages in a Scala-ish manner
+  * Support for akka-camel-ish Consumer and Producer actors
+  * Support for building immutable objects that represent JMS messages in a Scala-ish manner
   * Specify connections to initiate at Extension load time statically in application.conf
 
 Credits

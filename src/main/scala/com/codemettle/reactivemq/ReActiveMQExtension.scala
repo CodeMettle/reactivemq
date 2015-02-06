@@ -7,6 +7,7 @@
  */
 package com.codemettle.reactivemq
 
+import com.codemettle.reactivemq.ReActiveMQExtensionImpl.ConnectionFactoryHolder
 import com.codemettle.reactivemq.ReActiveMQMessages.{ConnectionEstablished, AutoConnect}
 import com.codemettle.reactivemq.activemq.ConnectionFactory
 import com.codemettle.reactivemq.activemq.ConnectionFactory.ConnectionKey
@@ -21,8 +22,36 @@ import scala.concurrent.duration._
  * @author steven
  *
  */
+object ReActiveMQExtensionImpl {
+    private[reactivemq] class ConnectionFactoryHolder {
+        private var connFacts = Map.empty[ConnectionKey, ConnectionFactory]
+
+        def getConnectionFactory(forKey: ConnectionKey): ConnectionFactory = synchronized {
+            connFacts.getOrElse(forKey, {
+                val ret = ConnectionFactory(forKey)
+                connFacts += (forKey → ret)
+                ret
+            })
+        }
+
+        def closeConnectionFactory(forKey: ConnectionKey): Unit = synchronized {
+            connFacts get forKey foreach (_.cleanup())
+            connFacts -= forKey
+        }
+
+        def cleanup() = synchronized {
+            connFacts.values foreach (_.cleanup())
+            connFacts = Map.empty
+        }
+    }
+}
+
 class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: ActorSystem) extends Extension {
-    val manager = system.actorOf(Manager.props, "reActiveMQ")
+    private val connFactHolder = new ConnectionFactoryHolder
+
+    system registerOnTermination connFactHolder.cleanup()
+
+    val manager = system.actorOf(Manager props connFactHolder, "reActiveMQ")
 
     val autoConnects: Map[String, ActorRef] = {
         import system.dispatcher
@@ -35,23 +64,6 @@ class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: ActorSy
         val mapF = Future sequence futures map (conns ⇒ (conns map (ce ⇒ ce.request.staticActorName.get → ce.connectionActor)).toMap)
 
         mapF.await
-    }
-
-    private var connFacts = Map.empty[ConnectionKey, ConnectionFactory]
-
-    system registerOnTermination cleanup()
-
-    def getConnectionFactory(forKey: ConnectionKey): ConnectionFactory = synchronized {
-        connFacts.getOrElse(forKey, {
-            val ret = ConnectionFactory(forKey)
-            connFacts += (forKey → ret)
-            ret
-        })
-    }
-
-    private def cleanup() = synchronized {
-        connFacts.values foreach (_.cleanup())
-        connFacts = Map.empty
     }
 }
 

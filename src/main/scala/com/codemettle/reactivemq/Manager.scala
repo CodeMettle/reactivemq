@@ -7,8 +7,8 @@
  */
 package com.codemettle.reactivemq
 
+import com.codemettle.reactivemq.ReActiveMQExtensionImpl.ConnectionFactoryHolder
 import com.codemettle.reactivemq.ReActiveMQMessages.{AutoConnect, ConnectionRequest, GetAuthenticatedConnection, GetConnection}
-import com.codemettle.reactivemq.activemq.ConnectionFactory
 import com.codemettle.reactivemq.activemq.ConnectionFactory.ConnectionKey
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor
 
@@ -21,19 +21,19 @@ import scala.util.{Failure, Success, Try}
  *
  */
 object Manager {
-    def props = {
-        Props(new Manager)
+    def props(connFactHolder: ConnectionFactoryHolder) = {
+        Props(new Manager(connFactHolder))
     }
 }
 
-class Manager extends Actor with ActorLogging {
+class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorLogging {
     private var connectionFactories = Map.empty[ConnectionKey, ActorRef]
 
     private val connFactName = Iterator from 0 map (i ⇒ s"Connection${base64(i)}")
 
     private def getConnectionFact(key: ConnectionKey, staticName: Option[String]): Try[ActorRef] = Try {
         connectionFactories.getOrElse(key, {
-            val connFact = ConnectionFactory(key)
+            val connFact = connFactHolder getConnectionFactory key
 
             val name = staticName.fold(connFactName.next())(identity)
 
@@ -66,6 +66,9 @@ class Manager extends Actor with ActorLogging {
         case req@GetAuthenticatedConnection(brokerUrl, user, pass, staticName, _) ⇒
             openConnection(ConnectionKey(brokerUrl, Some(user → pass), staticName), req)
 
-        case Terminated(act) ⇒ connectionFactories find (_._2 == act) foreach (kv ⇒ connectionFactories -= kv._1)
+        case Terminated(act) ⇒ connectionFactories find (_._2 == act) foreach (kv ⇒ {
+            connFactHolder closeConnectionFactory kv._1
+            connectionFactories -= kv._1
+        })
     }
 }
