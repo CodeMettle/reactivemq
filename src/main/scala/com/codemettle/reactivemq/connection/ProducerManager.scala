@@ -1,7 +1,7 @@
 /*
  * ProducerManager.scala
  *
- * Updated: Jan 29, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -52,7 +52,7 @@ private[connection] trait ProducerManager extends Actor {
 
     private def createProducer(dest: Destination) = {
         getDestination(dest) map (jmsDest ⇒ {
-            session createProducer jmsDest
+            connection createProducer jmsDest
         }) map (p ⇒ ProducerCreated(dest, p)) recover {
             case t ⇒ CreateFailed(dest, t)
         } pipeTo self

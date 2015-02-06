@@ -1,16 +1,15 @@
 /*
  * Manager.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
 package com.codemettle.reactivemq
 
-import org.apache.activemq.ActiveMQConnectionFactory
-
-import com.codemettle.reactivemq.Manager.ConnectionKey
 import com.codemettle.reactivemq.ReActiveMQMessages.{AutoConnect, ConnectionRequest, GetAuthenticatedConnection, GetConnection}
+import com.codemettle.reactivemq.activemq.ConnectionFactory
+import com.codemettle.reactivemq.activemq.ConnectionFactory.ConnectionKey
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor
 
 import akka.actor._
@@ -25,8 +24,6 @@ object Manager {
     def props = {
         Props(new Manager)
     }
-
-    private case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)], staticName: Option[String])
 }
 
 class Manager extends Actor with ActorLogging {
@@ -36,10 +33,7 @@ class Manager extends Actor with ActorLogging {
 
     private def getConnectionFact(key: ConnectionKey, staticName: Option[String]): Try[ActorRef] = Try {
         connectionFactories.getOrElse(key, {
-            val connFact = {
-                key.userAndPass.fold(new ActiveMQConnectionFactory(key.brokerUrl))(
-                    uandp ⇒ new ActiveMQConnectionFactory(uandp._1, uandp._2, key.brokerUrl))
-            }
+            val connFact = ConnectionFactory(key)
 
             val name = staticName.fold(connFactName.next())(identity)
 

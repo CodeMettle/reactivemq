@@ -1,14 +1,15 @@
 /*
  * DestinationManager.scala
  *
- * Updated: Jan 29, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
 package com.codemettle.reactivemq.connection
 
-import javax.jms.{Destination => JMSDestination, Session}
+import javax.jms
 
+import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 import com.codemettle.reactivemq.connection.DestinationManager.{CreateFailure, DestinationCreated}
 import com.codemettle.reactivemq.model._
 
@@ -21,7 +22,7 @@ import scala.concurrent.{Future, Promise}
  *
  */
 private[connection] object DestinationManager {
-    private case class DestinationCreated(req: Destination, dest: JMSDestination)
+    private case class DestinationCreated(req: Destination, dest: jms.Destination)
     private case class CreateFailure(dest: Destination, failure: Throwable)
 }
 
@@ -29,29 +30,29 @@ private[connection] trait DestinationManager extends Actor {
     this: ActorLogging ⇒
     import context.dispatcher
 
-    protected def session: Session
+    protected def connection: Connection
 
-    private var destRequests = Map.empty[Destination, List[Promise[JMSDestination]]]
-    private var destinations = Map.empty[Destination, JMSDestination]
+    private var destRequests = Map.empty[Destination, List[Promise[jms.Destination]]]
+    private var destinations = Map.empty[Destination, jms.Destination]
 
     private def createDestination(dest: Destination) = {
         (Future {
             dest match {
                 case tt: TempTopic ⇒ tt.jmsDest
                 case tq: TempQueue ⇒ tq.jmsDest
-                case Topic(name) ⇒ session createTopic name
-                case Queue(name) ⇒ session createQueue name
+                case Topic(name) ⇒ connection createTopic name
+                case Queue(name) ⇒ connection createQueue name
             }
         } map (d ⇒ DestinationCreated(dest, d)) recover {
             case t ⇒ CreateFailure(dest, t)
         }) pipeTo self
     }
 
-    protected def getDestination(dest: Destination): Future[JMSDestination] = {
+    protected def getDestination(dest: Destination): Future[jms.Destination] = {
         destinations get dest match {
             case Some(d) ⇒ Future successful d
             case None ⇒
-                val p = Promise[JMSDestination]()
+                val p = Promise[jms.Destination]()
                 val newList = p :: destRequests.getOrElse(dest, {
                     createDestination(dest)
                     Nil

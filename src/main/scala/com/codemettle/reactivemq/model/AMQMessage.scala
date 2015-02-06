@@ -1,7 +1,7 @@
 /*
  * AMQMessage.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -9,9 +9,9 @@ package com.codemettle.reactivemq
 package model
 
 import java.{io => jio, util => ju}
-import javax.jms.{Session, Message, ObjectMessage, TextMessage}
+import javax.jms
 
-import org.apache.activemq.command.{ActiveMQObjectMessage, ActiveMQTextMessage}
+import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 
 import scala.collection.JavaConverters._
 
@@ -21,17 +21,11 @@ import scala.collection.JavaConverters._
  */
 @SerialVersionUID(1L)
 case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessageProperties(), headers: Map[String, Any] = Map.empty) {
-    def jmsMessage(session: Session) = {
+    def jmsMessage(connection: Connection) = {
         val msg = body match {
-            case s: String ⇒
-                val msg = new ActiveMQTextMessage
-                msg setText s
-                msg
+            case s: String ⇒ connection createTextMessage s
 
-            case s: jio.Serializable ⇒
-                val msg = new ActiveMQObjectMessage
-                msg setObject s
-                msg
+            case s: jio.Serializable ⇒ connection createObjectMessage s
 
             case _ ⇒ sys.error(s"$body isn't serializable")
         }
@@ -41,8 +35,8 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
         properties.messageID foreach msg.setJMSMessageID
         msg.setJMSTimestamp(properties.timestamp)
         properties.correlationID foreach msg.setJMSCorrelationID
-        properties.replyTo map (_ jmsDestination session) foreach msg.setJMSReplyTo
-        properties.destination map (_ jmsDestination session) foreach msg.setJMSDestination
+        properties.replyTo map (_ jmsDestination connection) foreach msg.setJMSReplyTo
+        properties.destination map (_ jmsDestination connection) foreach msg.setJMSDestination
         msg.setJMSDeliveryMode(properties.deliveryMode)
         msg.setJMSRedelivered(properties.redelivered)
         properties.`type` foreach msg.setJMSType
@@ -64,10 +58,10 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
 }
 
 object AMQMessage {
-    def from(msg: Message) = {
+    def from(msg: jms.Message) = {
         val body = msg match {
-            case tm: TextMessage ⇒ tm.getText
-            case om: ObjectMessage ⇒ om.getObject
+            case tm: jms.TextMessage ⇒ tm.getText
+            case om: jms.ObjectMessage ⇒ om.getObject
             case _ ⇒ sys.error(s"Don't grok a ${msg.getClass.getSimpleName}")
         }
 
@@ -81,12 +75,12 @@ object AMQMessage {
 case class JMSMessageProperties(messageID: Option[String] = None, timestamp: Long = 0,
                                 correlationID: Option[String] = None, replyTo: Option[Destination] = None,
                                 destination: Option[Destination] = None,
-                                deliveryMode: Int = Message.DEFAULT_DELIVERY_MODE, redelivered: Boolean = false,
+                                deliveryMode: Int = jms.Message.DEFAULT_DELIVERY_MODE, redelivered: Boolean = false,
                                 `type`: Option[String] = None, expiration: Long = 0,
-                                priority: Int = Message.DEFAULT_PRIORITY)
+                                priority: Int = jms.Message.DEFAULT_PRIORITY)
 
 object JMSMessageProperties {
-    def from(msg: Message) = {
+    def from(msg: jms.Message) = {
         JMSMessageProperties(Option(msg.getJMSMessageID), msg.getJMSTimestamp, Option(msg.getJMSCorrelationID),
             Option(msg.getJMSReplyTo) map (Destination(_)), Option(msg.getJMSDestination) map (Destination(_)),
             msg.getJMSDeliveryMode, msg.getJMSRedelivered, Option(msg.getJMSType), msg.getJMSExpiration,

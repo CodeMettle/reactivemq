@@ -1,7 +1,7 @@
 /*
  * ConsumerManager.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -10,6 +10,7 @@ package com.codemettle.reactivemq.connection
 import javax.jms
 
 import com.codemettle.reactivemq.ReActiveMQMessages._
+import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.connection.ConsumerManager._
 import com.codemettle.reactivemq.model._
@@ -28,7 +29,7 @@ import scala.util.control.Exception.ignoring
 object ConsumerManager {
 
     private trait ConsumerActor extends Actor with ActorLogging {
-        protected def session: jms.Session
+        protected def connection: Connection
         protected def dest: Destination
 
         private def config = ReActiveMQConfig(context.system)
@@ -57,13 +58,13 @@ object ConsumerManager {
         }
 
         protected def createConsumer(jmsDest: jms.Destination) = {
-            val cons = session createConsumer jmsDest
+            val cons = connection createConsumer jmsDest
             cons setMessageListener msgListener
             consumer = Some(cons)
         }
     }
 
-    private class SharedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination,
+    private class SharedDestinationConsumer(protected val connection: Connection, protected val dest: Destination,
                                             protected val sendRepliesAs: ActorRef)
         extends Actor with SendRepliesAs with ConsumerActor with ActorLogging {
 
@@ -114,12 +115,12 @@ object ConsumerManager {
     }
 
     private object SharedDestinationConsumer {
-        def props(session: jms.Session, dest: Destination, sendRepliesAs: ActorRef) = {
-            Props(new SharedDestinationConsumer(session, dest, sendRepliesAs))
+        def props(conn: Connection, dest: Destination, sendRepliesAs: ActorRef) = {
+            Props(new SharedDestinationConsumer(conn, dest, sendRepliesAs))
         }
     }
 
-    private class DedicatedDestinationConsumer(protected val session: jms.Session, protected val dest: Destination,
+    private class DedicatedDestinationConsumer(protected val connection: Connection, protected val dest: Destination,
                                                subscriber: ActorRef, protected val sendRepliesAs: ActorRef)
         extends Actor with SendRepliesAs with ConsumerActor with ActorLogging {
         override def preStart() = {
@@ -171,8 +172,8 @@ object ConsumerManager {
     }
 
     private object DedicatedDestinationConsumer {
-        def props(session: jms.Session, dest: Destination, subscriber: ActorRef, sendRepliesAs: ActorRef) = {
-            Props(new DedicatedDestinationConsumer(session, dest, subscriber, sendRepliesAs))
+        def props(conn: Connection, dest: Destination, subscriber: ActorRef, sendRepliesAs: ActorRef) = {
+            Props(new DedicatedDestinationConsumer(conn, dest, subscriber, sendRepliesAs))
         }
     }
 
@@ -197,7 +198,7 @@ trait ConsumerManager extends Actor {
     this: DestinationManager with SendRepliesAs with ActorLogging ⇒
     import context.dispatcher
 
-    protected def session: jms.Session
+    protected def connection: Connection
 
     private var sharedConsumerActors = Map.empty[Destination, ActorRef]
     private var sharedConsumerSubscriptions = Map.empty[Destination, Set[ActorRef]]
@@ -221,7 +222,7 @@ trait ConsumerManager extends Actor {
         sharedConsumerActors.getOrElse(forDest, {
             val name = "shared-" + destName(forDest)
 
-            val act = context.actorOf(SharedDestinationConsumer.props(session, forDest, sendRepliesAs), name)
+            val act = context.actorOf(SharedDestinationConsumer.props(connection, forDest, sendRepliesAs), name)
             context watch act
             sharedConsumerActors += (forDest → act)
             act
@@ -232,7 +233,7 @@ trait ConsumerManager extends Actor {
         dedicatedConsumers.getOrElse(forDest → sender(), {
             val name = destName(forDest) + dedicatedNamer.next()
 
-            val act = context.actorOf(DedicatedDestinationConsumer.props(session, forDest, sender(), sendRepliesAs), name)
+            val act = context.actorOf(DedicatedDestinationConsumer.props(connection, forDest, sender(), sendRepliesAs), name)
             context watch act
             dedicatedConsumers += ((forDest → sender()) → act)
             act

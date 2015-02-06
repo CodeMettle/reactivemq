@@ -1,15 +1,14 @@
 /*
  * ConnectionActor.scala
  *
- * Updated: Jan 30, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
 package com.codemettle.reactivemq.connection
 
-import javax.jms.{Connection, Session}
-
-import com.codemettle.reactivemq.ReActiveMQMessages.{RequestMessage, CloseConnection, SendMessage}
+import com.codemettle.reactivemq.ReActiveMQMessages.{CloseConnection, RequestMessage, SendMessage}
+import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor.ConnectionException
 import com.codemettle.reactivemq.connection.requestreply.{RequestReplyActor, TempQueueReplyManager}
 import com.codemettle.reactivemq.model.TempQueue
@@ -17,19 +16,18 @@ import com.codemettle.reactivemq.model.TempQueue
 import akka.actor._
 import akka.util.Helpers
 import scala.util.{Failure, Success, Try}
-import scala.util.control.Exception.ignoring
 
 /**
  * @author steven
  *
  */
 object ConnectionActor {
-    def props(conn: Connection, sess: Session, connectionActor: ActorRef) = {
-        Props(new ConnectionActor(conn, sess, connectionActor))
+    def props(conn: Connection, connectionActor: ActorRef) = {
+        Props(new ConnectionActor(conn, connectionActor))
     }
 }
 
-class ConnectionActor(conn: Connection, protected val session: Session, protected val sendRepliesAs: ActorRef)
+class ConnectionActor(protected val connection: Connection, protected val sendRepliesAs: ActorRef)
     extends Actor with DestinationManager with ProducerManager with ConsumerManager with SendRepliesAs with ActorLogging {
     import context.dispatcher
 
@@ -40,13 +38,12 @@ class ConnectionActor(conn: Connection, protected val session: Session, protecte
     override def postStop() = {
         super.postStop()
 
-        ignoring(classOf[Exception])(session.close())
-        ignoring(classOf[Exception])(conn.close())
+        connection.close()
     }
 
     private def getTQRM: Try[(ActorRef, TempQueue)] = {
         tempQueueReplyMan.fold(Try {
-            val tempQueue = TempQueue create session
+            val tempQueue = TempQueue create connection
             val act = context.actorOf(TempQueueReplyManager.props(tempQueue, self), "tempQueueReplyManager")
             tempQueueReplyMan = Some(act → tempQueue)
             act → tempQueue
@@ -56,7 +53,7 @@ class ConnectionActor(conn: Connection, protected val session: Session, protecte
     def receive = handleDestinationMessages orElse handleProducerMessages orElse handleConsumerMessages orElse {
         case SendMessage(dest, msg, ttl, _) ⇒ routeFutureFromSRA(sender()) {
             val props = msg.properties
-            getProducer(dest) map (prod ⇒ prod.send(msg.jmsMessage(session), props.deliveryMode, props.priority, ttl))
+            getProducer(dest) map (prod ⇒ prod.send(msg.jmsMessage(connection), props.deliveryMode, props.priority, ttl))
         }
 
         case rm: RequestMessage ⇒ getTQRM match {

@@ -1,7 +1,7 @@
 /*
  * ConnectionFactoryActor.scala
  *
- * Updated: Jan 29, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -9,27 +9,24 @@ package com.codemettle.reactivemq
 package connection
 
 import java.util.UUID
-import javax.jms.{JMSException, ExceptionListener, Connection, Session}
-
-import org.apache.activemq.ActiveMQConnectionFactory
+import javax.jms
 
 import com.codemettle.reactivemq.ReActiveMQMessages._
-
+import com.codemettle.reactivemq.activemq.ConnectionFactory
+import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor._
 
 import akka.actor._
 import akka.pattern.pipe
 import scala.concurrent.Future
-import scala.util.control.Exception.ignoring
-import scala.util.control.NonFatal
 
 /**
  * @author steven
  *
  */
 object ConnectionFactoryActor {
-    def props(connFact: ActiveMQConnectionFactory) = {
+    def props(connFact: ConnectionFactory) = {
         Props(new ConnectionFactoryActor(connFact))
     }
 
@@ -127,17 +124,13 @@ object ConnectionFactoryActor {
     }
 
     private case class WaiterTimedOut(reqId: UUID)
-    private case class OpenedConnection(conn: Connection, sess: Session)
+    private case class OpenedConnection(conn: Connection)
     private case object ReestablishConnection
 
-    private[connection] case class ConnectionException(e: JMSException)
-
-    private class Listener(act: ActorRef) extends ExceptionListener {
-        override def onException(exception: JMSException): Unit = act ! ConnectionException(exception)
-    }
+    private[connection] case class ConnectionException(e: jms.JMSException)
 }
 
-private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFactory) extends FSM[fsm.State, fsm.Data] with Stash {
+private[connection] class ConnectionFactoryActor(connFact: ConnectionFactory) extends FSM[fsm.State, fsm.Data] with Stash {
     import context.dispatcher
 
     startWith(fsm.Idle, fsm.Data())
@@ -159,18 +152,7 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
     private def cancelWaitConnectTimers() = stateData.waitingForConnect map (_.reqId.toString) foreach cancelTimer
 
     private def openConnection(): Future[OpenedConnection] = Future {
-        val conn = connFact.createConnection()
-        conn.start()
-
-        try {
-            val sess = conn.createSession(false, Session.AUTO_ACKNOWLEDGE)
-
-            OpenedConnection(conn, sess)
-        } catch {
-            case NonFatal(e) ⇒
-                ignoring(classOf[Exception])(conn.close())
-                throw e
-        }
+        OpenedConnection(connFact.createConnection())
     }
 
     private def connectionFailedState(data: fsm.Data, failure: Throwable) = {
@@ -181,11 +163,11 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
         data.copy(waitingForConnect = Set.empty)
     }
 
-    private def connectionEstablishedState(conn: Connection, sess: Session, data: fsm.Data) = {
+    private def connectionEstablishedState(conn: Connection, data: fsm.Data) = {
         cancelWaitConnectTimers()
 
-        val connAct = context.actorOf(ConnectionActor.props(conn, sess, self), "conn")
-        conn setExceptionListener new Listener(connAct)
+        val connAct = context.actorOf(ConnectionActor.props(conn, self), "conn")
+        conn setExceptionListener (e ⇒ connAct ! ConnectionException(e))
         context watch connAct
 
         data.waitingForConnect foreach (w ⇒ w handleSuccess connAct)
@@ -268,8 +250,8 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
         case Event(Status.Failure(t), data) ⇒
             goto(fsm.Idle) using connectionFailedState(data, t)
 
-        case Event(OpenedConnection(conn, sess), data) ⇒
-            goto(fsm.Connected) using connectionEstablishedState(conn, sess, data)
+        case Event(OpenedConnection(conn), data) ⇒
+            goto(fsm.Connected) using connectionEstablishedState(conn, data)
     }
 
     onTransition {
@@ -347,13 +329,13 @@ private[connection] class ConnectionFactoryActor(connFact: ActiveMQConnectionFac
 
             stay() using connectionFailedState(data, t).copy(reconnectInFlight = false)
 
-        case Event(OpenedConnection(conn, sess), data) ⇒
+        case Event(OpenedConnection(conn), data) ⇒
             val reconnMsg = ConnectionReestablished(self, initialStateNotification = false)
             data.subscriptions.connectionListeners foreach (_ ! reconnMsg)
 
             unstashAll()
 
-            goto(fsm.Connected) using connectionEstablishedState(conn, sess, data).copy(reconnectInFlight = false)
+            goto(fsm.Connected) using connectionEstablishedState(conn, data).copy(reconnectInFlight = false)
     }
 
     initialize()
