@@ -1,7 +1,7 @@
 /*
  * VmBrokerTests.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -207,7 +207,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         val probe = TestProbe()
 
         probe.send(conn, SendMessage(Queue("recvtest"), AMQMessage("hello")))
-        probe.expectMsgType[Unit]
+        probe.expectMsg(SendAck)
 
         val msg = receiver.expectMsgType[CamelMessage]
 
@@ -216,7 +216,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         probe.send(conn, SendMessage(Queue("recvtest"),
             AMQMessage("headertest", JMSMessageProperties().copy(`type` = Some("test"), correlationID = Some("x")),
                 Map("testheader" → true, "head2" → 3))))
-        probe.expectMsgType[Unit]
+        probe.expectMsg(SendAck)
 
         val headertest = receiver.expectMsgType[CamelMessage]
 
@@ -496,7 +496,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         probe2.send(prod, "status test")
         consumer.expectMsgType[AMQMessage].body should equal ("status test")
-        probe2.expectMsgType[Unit]
+        probe2.expectMsg(SendAck)
 
         system stop prod
         system stop consumer.ref

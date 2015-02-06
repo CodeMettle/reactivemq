@@ -1,7 +1,7 @@
 /*
  * ReActiveMQMessages.scala
  *
- * Updated: Jan 30, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -76,6 +76,9 @@ object ReActiveMQMessages {
     @SerialVersionUID(1L)
     case class SendMessage(to: Destination, message: AMQMessage, timeToLive: Long = 0,
                            timeout: FiniteDuration = 10.seconds) extends ConnectedOperation
+
+    @SerialVersionUID(1L)
+    case object SendAck
 
     @SerialVersionUID(1L)
     case class RequestMessage(to: Destination, message: AMQMessage, timeout: FiniteDuration = 20.seconds)

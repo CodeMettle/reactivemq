@@ -7,7 +7,7 @@
  */
 package com.codemettle.reactivemq.connection
 
-import com.codemettle.reactivemq.ReActiveMQMessages.{CloseConnection, RequestMessage, SendMessage}
+import com.codemettle.reactivemq.ReActiveMQMessages.{SendAck, CloseConnection, RequestMessage, SendMessage}
 import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor.ConnectionException
 import com.codemettle.reactivemq.connection.requestreply.{RequestReplyActor, TempQueueReplyManager}
@@ -53,7 +53,10 @@ class ConnectionActor(protected val connection: Connection, protected val sendRe
     def receive = handleDestinationMessages orElse handleProducerMessages orElse handleConsumerMessages orElse {
         case SendMessage(dest, msg, ttl, _) ⇒ routeFutureFromSRA(sender()) {
             val props = msg.properties
-            getProducer(dest) map (prod ⇒ prod.send(msg.jmsMessage(connection), props.deliveryMode, props.priority, ttl))
+            getProducer(dest) map (prod ⇒ {
+                prod.send(msg.jmsMessage(connection), props.deliveryMode, props.priority, ttl)
+                SendAck
+            })
         }
 
         case rm: RequestMessage ⇒ getTQRM match {

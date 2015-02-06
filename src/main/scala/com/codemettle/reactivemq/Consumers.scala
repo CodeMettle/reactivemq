@@ -1,7 +1,7 @@
 /*
  * Consumers.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 6, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -10,7 +10,7 @@ package com.codemettle.reactivemq
 import java.util.UUID
 
 import com.codemettle.reactivemq.QueueConsumer.QueueConsumerSubscriber
-import com.codemettle.reactivemq.ReActiveMQMessages.{Consume, ConsumeFailed, DedicatedConsumerNotif, SendMessage}
+import com.codemettle.reactivemq.ReActiveMQMessages._
 import com.codemettle.reactivemq.TopicConsumer.TopicConsumerSubscriber
 import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.model.{AMQMessage, Destination, Queue, Topic}
@@ -39,14 +39,17 @@ object QueueConsumer {
 
         private def sendResponseToOriginator(reply: AMQMessage) = {
             replyToOrOrigMsg match {
-                case Left(msg) ⇒ log.warning("No JMSReplyTo on {}, can't reply with {}", msg, reply)
+                case Left(msg) ⇒
+                    log.warning("No JMSReplyTo on {}, can't reply with {}", msg, reply)
+                    context stop self
+
                 case Right(replyTo) ⇒
                     val replyMsg = correlationId.fold(reply)(reply.withCorrelationID)
 
                     connectionActor ! SendMessage(replyTo, replyMsg)
-            }
 
-            context stop self
+                    context become sentMessage(reply)
+            }
         }
 
         private def configureResponder(msgToReplyTo: AMQMessage, defaultTimeout: FiniteDuration) = {
@@ -69,6 +72,17 @@ object QueueConsumer {
             case Expired ⇒ context stop self
             case message: AMQMessage ⇒ sendResponseToOriginator(message)
             case message ⇒ sendResponseToOriginator(AMQMessage(message))
+        }
+
+        def sentMessage(reply: AMQMessage): Receive = {
+            case Expired ⇒ context stop self
+            case SendAck ⇒
+                log.debug("Response sent")
+                context stop self
+
+            case Status.Failure(t) ⇒
+                log.error(t, "Error sending {}", reply)
+                context stop self
         }
     }
 

@@ -146,7 +146,7 @@ To stop a dedicated consumer subscription, send an `EndConsumption(Destination)`
 ```scala
 connectionActor ! SendMessage(Queue("queueName"), AMQMessage(body))
 
-// sender receives Unit, or a Status.Failure(reason)
+// sender receives SendAck, or a Status.Failure(reason)
 ```
 
 ReActiveMQ also has an akka-camel-ish Producer actor:
