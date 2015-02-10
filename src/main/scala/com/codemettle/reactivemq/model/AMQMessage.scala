@@ -14,6 +14,7 @@ import javax.jms
 import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 
 import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
 
 /**
  * @author steven
@@ -54,6 +55,12 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
             this
         else
             copy(properties = newProps)
+    }
+
+    def bodyAs[T : ClassTag]: T = {
+        val ct = implicitly[ClassTag[T]]
+
+        ct.runtimeClass.asInstanceOf[Class[T]] cast body
     }
 }
 
