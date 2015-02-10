@@ -69,6 +69,7 @@ object AMQMessage {
         val body = msg match {
             case tm: jms.TextMessage ⇒ tm.getText
             case om: jms.ObjectMessage ⇒ om.getObject
+            case  m: jms.Message ⇒ null.asInstanceOf[Serializable]
             case _ ⇒ sys.error(s"Don't grok a ${msg.getClass.getSimpleName}")
         }
 
