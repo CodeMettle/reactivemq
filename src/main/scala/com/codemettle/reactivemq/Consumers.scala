@@ -1,7 +1,7 @@
 /*
  * Consumers.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 11, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -93,7 +93,7 @@ object QueueConsumer {
     }
 
     private class QueueConsumerSubscriber(connectionActor: ActorRef, dest: Queue, sendStatusNotifs: Boolean,
-                                          noExpirationReplyTimeout: FiniteDuration) extends Actor {
+                                          noExpirationReplyTimeout: FiniteDuration, oneway: Boolean) extends Actor {
         override def preStart() = {
             super.preStart()
 
@@ -116,6 +116,13 @@ object QueueConsumer {
             actor
         }
 
+        private def getReplyActor(forMessage: AMQMessage): ActorRef = {
+            if (oneway)
+                Actor.noSender
+            else
+                createResponder(forMessage)
+        }
+
         def receive = {
             case cf: ConsumeFailed ⇒
                 subscribe()
@@ -123,14 +130,14 @@ object QueueConsumer {
 
             case notif: DedicatedConsumerNotif ⇒ if (sendStatusNotifs) context.parent forward notif
 
-            case msg: AMQMessage ⇒ context.parent.tell(msg, createResponder(msg))
+            case msg: AMQMessage ⇒ context.parent.tell(msg, getReplyActor(msg))
         }
     }
 
     private object QueueConsumerSubscriber {
         def props(connectionActor: ActorRef, dest: Queue, sendStatusNotifs: Boolean,
-                  noExpirationReplyTimeout: FiniteDuration) = {
-            Props(new QueueConsumerSubscriber(connectionActor, dest, sendStatusNotifs, noExpirationReplyTimeout))
+                  noExpirationReplyTimeout: FiniteDuration, oneway: Boolean) = {
+            Props(new QueueConsumerSubscriber(connectionActor, dest, sendStatusNotifs, noExpirationReplyTimeout, oneway))
         }
     }
 
@@ -138,12 +145,11 @@ object QueueConsumer {
     private case object Expired
 }
 
-trait QueueConsumer extends Actor {
+trait QueueConsumer extends Actor with TwoWayCapable {
     private val config = ReActiveMQConfig(context.system)
 
-    context.actorOf(
-        QueueConsumerSubscriber.props(connection, consumeFrom, receiveConsumeNotifications, noExpirationReplyTimeout),
-        "sub")
+    context.actorOf(QueueConsumerSubscriber.props(connection, consumeFrom, receiveConsumeNotifications,
+        noExpirationReplyTimeout, oneway), "sub")
 
     def connection: ActorRef
     def consumeFrom: Queue

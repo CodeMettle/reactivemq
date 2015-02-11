@@ -1,7 +1,7 @@
 /*
  * Producer.scala
  *
- * Updated: Feb 4, 2015
+ * Updated: Feb 11, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -21,20 +21,14 @@ import scala.concurrent.duration._
  *
  */
 object Producer {
-    trait Oneway extends Producer {
-        override def oneway: Boolean = true
-    }
-
     private case class LogError(t: Throwable, msg: AMQMessage)
 }
 
-trait Producer extends Actor with ActorLogging {
+trait Producer extends Actor with TwoWayCapable with ActorLogging {
     import context.dispatcher
 
     def connection: ActorRef
     def destination: Destination
-
-    protected def oneway: Boolean = false
 
     protected def transformOutgoingMessage(msg: Any) = msg
 

@@ -1,7 +1,7 @@
 /*
  * VmBrokerTests.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 11, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -17,7 +17,6 @@ import org.apache.activemq.store.memory.MemoryPersistenceAdapter
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
-import com.codemettle.reactivemq.Producer.Oneway
 import com.codemettle.reactivemq.ReActiveMQMessages._
 import com.codemettle.reactivemq.VmBrokerTests.{nonErrorLogging, logLevel, testConfig}
 import com.codemettle.reactivemq.model._
@@ -392,7 +391,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    it should "correctly respond to QueueConsumer messages" in {
+    "A QueueConsumer" should "consume messages and allow responses" in {
         val conn = getConnection
 
         val cons = TestActorRef(new TestQueueConsumer("testQueueCons", conn))
@@ -422,6 +421,54 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
+    class TestOnewayQueueConsumer(qName: String, fwdTo: ActorRef, val connection: ActorRef) extends QueueConsumer with Oneway {
+        def consumeFrom = Queue(qName)
+
+        def receive = {
+            case msg ⇒ fwdTo forward msg
+        }
+    }
+
+    it should "consume messages without creating a responder in oneway mode" in {
+        val conn = getConnection
+
+        val probe = TestProbe()
+
+        val cons = TestActorRef(new TestOnewayQueueConsumer("testonewayq", probe.ref, conn))
+
+        probe.send(conn, SendMessage(Queue("testonewayq"), AMQMessage("hi")))
+
+        probe.expectMsg(SendAck)
+
+        probe.expectMsgType[AMQMessage].bodyAs[String] should equal ("hi")
+        // one-way consumer, who forwards the message to probe, forwards the sender that should be Actor.noSender as
+        // opposed to an actor ref on a two-way consumer that sends replies over amq
+        probe.sender().path should equal (cons.path.root / "deadLetters")
+
+        system stop cons
+
+        closeConnection(conn)
+    }
+
+    class TestOnewayQueueConsWithStatus(qName: String, fwdTo: ActorRef, connection: ActorRef)
+        extends TestOnewayQueueConsumer(qName, fwdTo, connection) {
+        override protected def receiveConsumeNotifications: Boolean = true
+    }
+
+    it should "send queue consumption status notifications" in {
+        val conn = getConnection
+
+        val probe = TestProbe()
+
+        val cons = TestActorRef(new TestOnewayQueueConsWithStatus("teststatusnotifsq", probe.ref, conn))
+
+        probe.expectMsg(ConsumeSuccess(Queue("teststatusnotifsq")))
+
+        system stop cons
+
+        closeConnection(conn)
+    }
+
     class TestTopicConsumer(tName: String, val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
         def consumeFrom = Topic(tName)
 
@@ -430,7 +477,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    it should "allow TopicConsumers to receive messages" in {
+    "A TopicConsumer" should "receive messages" in {
         val conn = getConnection
 
         val probe1 = TestProbe()
@@ -456,7 +503,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
     class TestOnewayProducer(val destination: Destination, val connection: ActorRef) extends Producer with Oneway
 
-    it should "allow Oneway Producers to send messages" in {
+    "A Producer" should "send messages in oneway mode" in {
         val conn = getConnection
 
         val consumer = TestProbe()
@@ -482,7 +529,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         override protected def swallowSendStatus: Boolean = false
     }
 
-    it should "allow Oneway Producers to send messages and return status" in {
+    it should "send messages and return status in oneway mode" in {
         val conn = getConnection
 
         val consumer = TestProbe()
@@ -506,7 +553,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
     class TestProducer(val destination: Destination, val connection: ActorRef) extends Producer
 
-    it should "allow request/reply Producers to send/receive messages" in {
+    it should "send/receive messages in twoway mode" in {
         val conn = getConnection
 
         val qcons = TestActorRef(new TestQueueConsumer("prodrrtest", conn))
@@ -546,7 +593,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    it should "allow producers to transform outgoing messages" in {
+    it should "transform outgoing messages" in {
         val conn = getConnection
 
         val qcons = TestActorRef(new TestQueueConsumer("prodrrtest", conn))
@@ -574,7 +621,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
-    it should "time out sends while disconnected" in {
+    "ReActiveMQ" should "time out sends while disconnected" in {
         val conn = getConnection
 
         val probe = TestProbe()
