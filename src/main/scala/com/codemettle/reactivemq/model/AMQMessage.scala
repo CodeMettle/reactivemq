@@ -1,7 +1,7 @@
 /*
  * AMQMessage.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 11, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -61,6 +61,29 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
         val ct = implicitly[ClassTag[T]]
 
         ct.runtimeClass.asInstanceOf[Class[T]] cast body
+    }
+
+    lazy val camelHeaders: Map[String, Any] = {
+        val propHeaders = Map(
+            "JMSMessageID" → properties.messageID,
+            "JMSTimestamp" → properties.timestamp,
+            "JMSCorrelationID" → properties.correlationID,
+            "JMSReplyTo" → properties.replyTo,
+            "JMSDestination" → (properties.destination map (_.name)),
+            "JMSDeliveryMode" → properties.deliveryMode,
+            "JMSRedelivered" → properties.redelivered,
+            "JMSType" → properties.`type`,
+            "JMSExpiration" → properties.expiration,
+            "JMSPriority" → properties.priority
+        )
+
+        val nonEmptyHeaders = (Map.empty[String, Any] /: propHeaders) {
+            case (acc, (_, None)) ⇒ acc
+            case (acc, (k, Some(v))) ⇒ acc + (k → v)
+            case (acc, (k, v)) ⇒ acc + (k → v)
+        }
+
+        headers ++ nonEmptyHeaders
     }
 }
 
