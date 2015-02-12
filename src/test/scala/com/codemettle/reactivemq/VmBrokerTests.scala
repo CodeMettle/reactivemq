@@ -621,6 +621,49 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         closeConnection(conn)
     }
 
+    class TestTransformResponseProducer(val destination: Destination, val connection: ActorRef) extends Producer {
+        override protected def transformResponse(msg: Any): Any = msg match {
+            case a@AMQMessage(str: String, _, _) ⇒ str.reverse
+            case a@AMQMessage(num: jl.Integer, _, _) ⇒ 0 - num.intValue()
+            case _ ⇒ msg
+        }
+    }
+
+    it should "transform replies" in {
+        val conn = getConnection
+
+        val cons = TestActorRef(new QueueConsumer {
+            override def consumeFrom: Queue = Queue("xformReplies")
+
+            override def connection: ActorRef = conn
+
+            override def receive: Actor.Receive = {
+                case msg ⇒ sender() ! msg
+            }
+        })
+
+        val prod = TestActorRef(new TestTransformResponseProducer(Queue("xformReplies"), conn))
+
+        val probe = TestProbe()
+
+        probe.send(prod, "hello")
+
+        probe.expectMsg("olleh")
+
+        probe.send(prod, 12)
+
+        probe.expectMsg(-12)
+
+        probe.send(prod, Topic("ueo"))
+
+        probe.expectMsgType[AMQMessage].body should equal (Topic("ueo"))
+
+        system stop prod
+        system stop cons
+
+        closeConnection(conn)
+    }
+
     "ReActiveMQ" should "time out sends while disconnected" in {
         val conn = getConnection
 

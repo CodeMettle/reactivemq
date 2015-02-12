@@ -7,14 +7,15 @@
  */
 package com.codemettle.reactivemq
 
-import com.codemettle.reactivemq.Producer.LogError
+import com.codemettle.reactivemq.Producer.{ResponseTransformer, LogError}
 import com.codemettle.reactivemq.ReActiveMQMessages.{RequestMessage, SendMessage}
 import com.codemettle.reactivemq.model.{AMQMessage, Destination}
 
-import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.actor._
 import akka.pattern.ask
-import akka.util.Timeout
+import akka.util.{Helpers, Timeout}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 /**
  * @author steven
@@ -22,6 +23,35 @@ import scala.concurrent.duration._
  */
 object Producer {
     private case class LogError(t: Throwable, msg: AMQMessage)
+
+    private case object TimedOut
+
+    private class ResponseTransformer(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) ⇒ Any) extends Actor {
+        import context.dispatcher
+
+        private val timer = context.system.scheduler.scheduleOnce(timeout + 1.second, self, TimedOut)
+
+        override def postStop() = {
+            super.postStop()
+
+            timer.cancel()
+        }
+
+        def receive = {
+            case TimedOut ⇒ context stop self
+
+            case msg ⇒ Try(xform(msg)) match {
+                case Success(m) ⇒ origSender forward m
+                case Failure(t) ⇒ origSender forward Status.Failure(t)
+            }
+        }
+    }
+
+    private object ResponseTransformer {
+        def props(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) ⇒ Any) = {
+            Props(new ResponseTransformer(timeout, origSender, xform))
+        }
+    }
 }
 
 trait Producer extends Actor with TwoWayCapable with ActorLogging {
@@ -30,7 +60,11 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
     def connection: ActorRef
     def destination: Destination
 
+    private val actorNamer = Iterator from 0 map (i ⇒ s"responder${Helpers.base64(i)}")
+
     protected def transformOutgoingMessage(msg: Any) = msg
+
+    protected def transformResponse(msg: Any) = msg
 
     /**
      * Override to false if you want the Unit/Status.Failure from a one-way message returned
@@ -68,7 +102,10 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
                 } else {
                     connection forward sendMessage
                 }
-            } else
-                connection forward RequestMessage(destination, newMsg)
+            } else {
+                val respActor = context
+                    .actorOf(ResponseTransformer.props(requestTimeout, sender(), transformResponse), actorNamer.next())
+                connection.tell(RequestMessage(destination, newMsg), respActor)
+            }
     }
 }
