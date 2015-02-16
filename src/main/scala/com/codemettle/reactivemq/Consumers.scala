@@ -1,7 +1,7 @@
 /*
  * Consumers.scala
  *
- * Updated: Feb 11, 2015
+ * Updated: Feb 16, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -29,6 +29,7 @@ object QueueConsumer {
         private var timer = Option.empty[Cancellable]
 
         private var replyToOrOrigMsg: Either[AMQMessage, Destination] = _
+        private var messageId = Option.empty[String]
         private var correlationId = Option.empty[String]
 
         override def postStop() = {
@@ -44,7 +45,10 @@ object QueueConsumer {
                     context stop self
 
                 case Right(replyTo) ⇒
-                    val replyMsg = correlationId.fold(reply)(reply.withCorrelationID)
+                    // http://docs.oracle.com/cd/E13171_01/alsb/docs25/interopjms/MsgIDPatternforJMS.html
+                    //  fallback to msgId
+                    val responseCorrId = correlationId orElse messageId
+                    val replyMsg = responseCorrId.fold(reply)(reply.withCorrelationID)
 
                     connectionActor ! SendMessage(replyTo, replyMsg)
 
@@ -63,6 +67,7 @@ object QueueConsumer {
 
             timer = Some(context.system.scheduler.scheduleOnce(timeUntilExpiration, self, Expired))
 
+            messageId = msgToReplyTo.properties.messageID
             correlationId = msgToReplyTo.properties.correlationID
             replyToOrOrigMsg = msgToReplyTo.properties.replyTo toRight msgToReplyTo
         }

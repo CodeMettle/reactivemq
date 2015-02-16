@@ -1,7 +1,7 @@
 /*
  * VmBrokerTests.scala
  *
- * Updated: Feb 11, 2015
+ * Updated: Feb 16, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -336,6 +336,62 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         cons ! PoisonPill
 
         probe.expectMsgType[Terminated]
+
+        closeConnection(conn)
+    }
+
+    // http://docs.oracle.com/cd/E13171_01/alsb/docs25/interopjms/MsgIDPatternforJMS.html
+    //  "In the request message, the ID can be stored as a correlation ID property or simply a message ID property.
+    //   When used as a correlation ID, this can cause confusion about which message is the request and which is the
+    //   reply. If a request has a message ID but no correlation ID, then a reply has a correlation ID that is the same
+    //   as the request's message ID."
+
+    it should "fallback to messageID in the case of no correlationID" in {
+        val conn = getConnection
+
+        val probe = TestProbe()
+        val probe2 = TestProbe()
+
+        val cons1 = TestActorRef(new QueueConsumer {
+            override def connection: ActorRef = conn
+
+            override def consumeFrom: Queue = Queue("testmsgidq")
+
+            def receive = {
+                case AMQMessage(body, props, _) ⇒
+                    probe.ref ! props
+                    sender() ! body
+            }
+        })
+
+        val cons2 = TestActorRef(new QueueConsumer {
+            override def connection: ActorRef = conn
+
+            override def consumeFrom: Queue = Queue("testmsgidrespq")
+
+            def receive = {
+                case msg ⇒ probe2.ref ! msg
+            }
+        })
+
+        val message = AMQMessage("hello", JMSMessageProperties(correlationID = None, replyTo = Some(Queue("testmsgidrespq"))))
+
+        val probe3 = TestProbe()
+        probe3.send(conn, SendMessage(Queue("testmsgidq"), message))
+
+        probe3.expectMsg(SendAck)
+
+        val sentMessageProps = probe.expectMsgType[JMSMessageProperties]
+
+        sentMessageProps.messageID should be ('defined)
+
+        val response = probe2.expectMsgType[AMQMessage]
+
+        response.properties.correlationID.value should equal (sentMessageProps.messageID.value)
+
+        system stop cons2
+
+        system stop cons1
 
         closeConnection(conn)
     }
