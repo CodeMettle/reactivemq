@@ -250,6 +250,14 @@ License
 Changelog
 ---------
 
+* **0.5.1**
+  * SendMessage messages are now replied to with a SendAck case object instead of Unit
+  * AMQMessage.bodyAs method (like CamelMessage.bodyAs except no conversion tried, just a ClassCastException if the type is wrong)
+  * Support jms.Message (no body, AMQMessage's body field will be null)
+  * QueueConsumer can be in consume-only mode, saves an actor creation for each message, but replying to sender() goes to deadLetters
+  * AMQMessage.camelHeaders - yields a map with any headers on the message, plus all the JMSMessageProperty properties in the map with "JMS" prefix (allows easier transition from Camel)
+  * Producer.transformResponse can be overridden like akka-camel's Producer, may get changed in a future release to return an Option[(Any) => Any] so subclasses can return None and save an actor creation.
+  * Use the request message's MessageID as the response's CorrelationID if the request had no CorrelationID in request/reply mode
 * **0.5.0**
   * Initial Release
   * Support for major JMS operations in an actor+message passing interface
