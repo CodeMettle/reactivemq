@@ -6,7 +6,7 @@ organization := "com.codemettle.reactivemq"
 
 name := "reactivemq"
 
-version := "0.5.1"
+version := "0.5.2-SNAPSHOT"
 
 description := "Solr HTTP client using Akka and Spray"
 
