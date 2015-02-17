@@ -8,7 +8,7 @@ name := "reactivemq"
 
 version := "0.5.2-SNAPSHOT"
 
-description := "Solr HTTP client using Akka and Spray"
+description := "Akka-based ActiveMQ client"
 
 startYear := Some(2015)
 
