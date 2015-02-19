@@ -1,7 +1,7 @@
 /*
  * ReActiveMQMessages.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 19, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -22,9 +22,8 @@ object ReActiveMQMessages {
         def staticActorName: Option[String]
     }
 
-    private[reactivemq] case class AutoConnect(brokerUrl: String, connName: String) extends ConnectionRequest {
-        override def timeout: FiniteDuration = Long.MaxValue.nanos
-
+    private[reactivemq] case class AutoConnect(brokerUrl: String, connName: String, timeout: FiniteDuration)
+        extends ConnectionRequest {
         override def staticActorName: Option[String] = Some(connName)
     }
 

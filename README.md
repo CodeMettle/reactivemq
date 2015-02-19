@@ -76,7 +76,7 @@ ReActiveMQExtension(system).manager ! GetConnection("nio://esb:61616", Some("myN
 
 /* .... */
 
-val connSel = context.actorSelection("/user/reActiveMQ/myName")
+val connSel = context.actorSelection("/system/reActiveMQ/myName")
 ```
 
 Connections can be authenticated:
@@ -226,7 +226,7 @@ val connectionActor = ReActiveMQExtension(system) autoConnects "myConn"
 
 // or perhaps
 
-context.actorSelection("/user/reActiveMQ/secondConn") ! Identify("")
+context.actorSelection("/system/reActiveMQ/secondConn") ! Identify("")
 // standard ActorIdentity response with the connectionActor
 ```
 
@@ -250,6 +250,8 @@ License
 Changelog
 ---------
 
+* **0.5.2**
+  * Load ReActiveMQ as a system actor
 * **0.5.1**
   * SendMessage messages are now replied to with a SendAck case object instead of Unit
   * AMQMessage.bodyAs method (like CamelMessage.bodyAs except no conversion tried, just a ClassCastException if the type is wrong)

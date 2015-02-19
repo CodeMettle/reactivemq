@@ -1,7 +1,7 @@
 /*
  * VmBrokerTests.scala
  *
- * Updated: Feb 16, 2015
+ * Updated: Feb 19, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -147,7 +147,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     it should "have stable connection names" in {
         val connEst = getConnectionEstablished
 
-        val sel = system.actorSelection(s"/user/reActiveMQ/$brokerName")
+        val sel = system.actorSelection(s"/system/reActiveMQ/$brokerName")
 
         val probe = TestProbe()
 

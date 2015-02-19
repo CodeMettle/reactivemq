@@ -1,7 +1,7 @@
 /*
  * ReActiveMQExtension.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 19, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -17,6 +17,7 @@ import akka.actor._
 import akka.util.Timeout
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.{Success, Failure, Try}
 
 /**
  * @author steven
@@ -46,24 +47,29 @@ object ReActiveMQExtensionImpl {
     }
 }
 
-class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: ActorSystem) extends Extension {
+class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: ExtendedActorSystem) extends Extension {
     private val connFactHolder = new ConnectionFactoryHolder
 
     system registerOnTermination connFactHolder.cleanup()
 
-    val manager = system.actorOf(Manager props connFactHolder, "reActiveMQ")
+    val manager = system.systemActorOf(Manager props connFactHolder, "reActiveMQ")
 
-    val autoConnects: Map[String, ActorRef] = {
+    val autoConnects: Map[String, ActorRef] = Try {
         import system.dispatcher
         import akka.pattern.ask
         import spray.util.pimpFuture
-        implicit val timeout = Timeout(10.seconds)
+        implicit val timeout = Timeout(config.autoconnectTimeout + 2.seconds)
 
-        val futures = config.autoConnections map (e ⇒ (manager ? AutoConnect(e._2, e._1)).mapTo[ConnectionEstablished])
+        val futures = config.autoConnections map (e ⇒ (manager ? AutoConnect(e._2, e._1, config.autoconnectTimeout)).mapTo[ConnectionEstablished])
 
         val mapF = Future sequence futures map (conns ⇒ (conns map (ce ⇒ ce.request.staticActorName.get → ce.connectionActor)).toMap)
 
-        mapF.await
+        mapF.await(config.autoconnectTimeout + 5.seconds)
+    } match {
+        case Success(ac) ⇒ ac
+        case Failure(t) ⇒
+            system stop manager
+            throw t
     }
 }
 

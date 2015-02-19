@@ -1,7 +1,7 @@
 /*
  * Manager.scala
  *
- * Updated: Feb 6, 2015
+ * Updated: Feb 19, 2015
  *
  * Copyright (c) 2015, CodeMettle
  */
@@ -57,7 +57,7 @@ class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorL
     }
 
     def receive = {
-        case req@AutoConnect(brokerUrl, name) ⇒
+        case req@AutoConnect(brokerUrl, name, _) ⇒
             openConnection(ConnectionKey(brokerUrl, None, Some(name)), req)
 
         case req@GetConnection(brokerUrl, staticName, _) ⇒
