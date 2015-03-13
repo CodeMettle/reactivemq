@@ -8,16 +8,15 @@
 package com.codemettle.reactivemq.connection.requestreply
 
 import java.util.UUID
-import javax.jms.MessageProducer
 
-import com.codemettle.reactivemq.ReActiveMQMessages.{RequestMessage, SendMessage}
+import com.codemettle.reactivemq.ReActiveMQMessages.{RequestMessage, SendAck, SendMessage}
 import com.codemettle.reactivemq.RequestTimedOut
 import com.codemettle.reactivemq.connection.SendRepliesAs
 import com.codemettle.reactivemq.connection.requestreply.RequestReplyActor.TimedOut
 import com.codemettle.reactivemq.model.{AMQMessage, TempQueue}
 
 import akka.actor._
-import akka.pattern.{AskTimeoutException, ask}
+import akka.pattern.{AskTimeoutException, ask, pipe}
 import akka.util.Timeout
 import scala.concurrent.duration._
 
@@ -52,9 +51,13 @@ class RequestReplyActor(replyTo: ActorRef, tempQueueManager: ActorRef, replyQueu
     }
 
     def receive = {
+        case SendAck ⇒ // cool
+
         case ReceiveTimeout ⇒ context stop self
 
-        case error: Status.Failure ⇒ replyTo tellFromSRA error
+        case error: Status.Failure ⇒
+            replyTo tellFromSRA error
+            context stop self
 
         case RequestMessage(dest, msg, timeout) ⇒
             val withReplyTo = msg.properties.copy(replyTo = Some(replyQueue))
@@ -71,15 +74,11 @@ class RequestReplyActor(replyTo: ActorRef, tempQueueManager: ActorRef, replyQueu
 
             implicit val to = Timeout(timeout)
 
-            (connection ? SendMessage(dest, toSend, timeout.toMillis, timeout)) onFailure {
-                case _: AskTimeoutException ⇒
-                    replyTo tellFromSRA Status.Failure(RequestTimedOut(timeout))
-                    context stop self
+            (connection ? SendMessage(dest, toSend, timeout.toMillis, timeout)).transform(identity, {
+                case _: AskTimeoutException ⇒ RequestTimedOut(timeout)
 
-                case t ⇒
-                    replyTo tellFromSRA Status.Failure(t)
-                    context stop self
-            }
+                case t ⇒ t
+            }) pipeTo self
 
         case reply: AMQMessage ⇒
             replyTo tellFromSRA reply

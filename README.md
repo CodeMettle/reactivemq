@@ -252,6 +252,7 @@ Changelog
 
 * **0.5.2**
   * Load ReActiveMQ as a system actor
+  * Fix issue in Request-Reply wrt accessing actor state from a future leading to NPEs
 * **0.5.1**
   * SendMessage messages are now replied to with a SendAck case object instead of Unit
   * AMQMessage.bodyAs method (like CamelMessage.bodyAs except no conversion tried, just a ClassCastException if the type is wrong)
