@@ -7,6 +7,7 @@
  */
 package com.codemettle.reactivemq
 
+import com.codemettle.reactivemq.config.AutoConnectConfig
 import com.codemettle.reactivemq.model.{AMQMessage, Destination, Queue, Topic}
 
 import akka.actor.ActorRef
@@ -22,7 +23,7 @@ object ReActiveMQMessages {
         def staticActorName: Option[String]
     }
 
-    private[reactivemq] case class AutoConnect(brokerUrl: String, connName: String, timeout: FiniteDuration)
+    private[reactivemq] case class AutoConnect(config: AutoConnectConfig, connName: String, timeout: FiniteDuration)
         extends ConnectionRequest {
         override def staticActorName: Option[String] = Some(connName)
     }

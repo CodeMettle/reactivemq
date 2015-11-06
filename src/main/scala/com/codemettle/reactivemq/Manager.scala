@@ -10,6 +10,7 @@ package com.codemettle.reactivemq
 import com.codemettle.reactivemq.ReActiveMQExtensionImpl.ConnectionFactoryHolder
 import com.codemettle.reactivemq.ReActiveMQMessages.{AutoConnect, ConnectionRequest, GetAuthenticatedConnection, GetConnection}
 import com.codemettle.reactivemq.activemq.ConnectionFactory.ConnectionKey
+import com.codemettle.reactivemq.config.AutoConnectConfig
 import com.codemettle.reactivemq.connection.ConnectionFactoryActor
 
 import akka.actor._
@@ -57,7 +58,10 @@ class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorL
     }
 
     def receive = {
-        case req@AutoConnect(brokerUrl, name, _) ⇒
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, Some(user), Some(pass)), name, _) ⇒
+            openConnection(ConnectionKey(brokerUrl, Some(user → pass), Some(name)), req)
+
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, _, _), name, _) ⇒
             openConnection(ConnectionKey(brokerUrl, None, Some(name)), req)
 
         case req@GetConnection(brokerUrl, staticName, _) ⇒
