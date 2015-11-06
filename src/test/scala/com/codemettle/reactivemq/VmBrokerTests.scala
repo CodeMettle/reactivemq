@@ -7,18 +7,19 @@
  */
 package com.codemettle.reactivemq
 
-import java.{lang => jl}
+import java.{lang ⇒ jl, util ⇒ ju}
 
 import ch.qos.logback.classic.{Level, LoggerContext}
 import com.typesafe.config.ConfigFactory
 import org.apache.activemq.broker.BrokerService
 import org.apache.activemq.camel.component.ActiveMQComponent.activeMQComponent
+import org.apache.activemq.security.{AuthenticationUser, SimpleAuthenticationPlugin}
 import org.apache.activemq.store.memory.MemoryPersistenceAdapter
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
 import com.codemettle.reactivemq.ReActiveMQMessages._
-import com.codemettle.reactivemq.VmBrokerTests.{nonErrorLogging, logLevel, testConfig}
+import com.codemettle.reactivemq.VmBrokerTests.{logLevel, nonErrorLogging, testConfig}
 import com.codemettle.reactivemq.model._
 
 import akka.actor._
@@ -65,8 +66,19 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    private def startBroker() = {
+    private def startBroker(username: Option[String] = None, password: Option[String] = None) = {
         val broker = new BrokerService
+        for (u ← username; p ← password) {
+            def authPlug = {
+                def user = new AuthenticationUser(u, p, "users")
+                val plug = new SimpleAuthenticationPlugin()
+                plug.setAnonymousAccessAllowed(false)
+                plug.setUsers(ju.Arrays.asList(user))
+                plug
+            }
+
+            broker.setPlugins(Array(authPlug))
+        }
         broker.setBrokerName(brokerName)
         broker.setUseJmx(false)
         broker.setPersistent(false)
@@ -81,6 +93,11 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     private def stopBroker() = {
         broker foreach (_.stop())
         broker = None
+    }
+
+    private def restartBroker(username: Option[String] = None, password: Option[String] = None) = {
+        stopBroker()
+        startBroker(username, password)
     }
 
     override protected def beforeAll(): Unit = {
@@ -142,6 +159,36 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         probe.send(manager, GetConnection(s"vm://blah?create=false"))
 
         probe.expectMsgType[ConnectionFailed]
+    }
+
+    it should "return auth error" in {
+        restartBroker(Some("user"), Some("pass"))
+
+        val probe = TestProbe()
+
+        probe.send(manager, GetConnection(s"vm://$brokerName?create=false", Some(brokerName)))
+
+        probe.expectMsgType[ConnectionFailed].cause shouldBe a[javax.jms.JMSSecurityException]
+
+        system stop probe.ref
+
+        restartBroker()
+    }
+
+    it should "connect with authentication" in {
+        restartBroker(Some("user"), Some("pass"))
+
+        val probe = TestProbe()
+
+        probe.send(manager, GetAuthenticatedConnection(s"vm://$brokerName?create=false", "user", "pass"))
+
+        val connEst = probe.expectMsgType[ConnectionEstablished]
+
+        closeConnection(connEst.connectionActor)
+
+        system stop probe.ref
+
+        restartBroker()
     }
 
     it should "have stable connection names" in {
@@ -447,9 +494,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    "A QueueConsumer" should "consume messages and allow responses" in {
-        val conn = getConnection
-
+    def doConsumeAndRespond(conn: ActorRef) = {
         val cons = TestActorRef(new TestQueueConsumer("testQueueCons", conn))
 
         val probe = TestProbe()
@@ -475,6 +520,24 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         probe.expectMsgType[Terminated]
 
         closeConnection(conn)
+    }
+
+    "A QueueConsumer" should "consume messages and allow responses" in doConsumeAndRespond(getConnection)
+
+    it should "consume messages and allow responses with authentication" in {
+        restartBroker(Some("user"), Some("pass"))
+
+        val probe = TestProbe()
+
+        probe.send(manager, GetAuthenticatedConnection(s"vm://$brokerName?create=false", "user", "pass"))
+
+        val connEst = probe.expectMsgType[ConnectionEstablished]
+
+        system stop probe.ref
+
+        doConsumeAndRespond(connEst.connectionActor)
+
+        restartBroker()
     }
 
     class TestOnewayQueueConsumer(qName: String, fwdTo: ActorRef, val connection: ActorRef) extends QueueConsumer with Oneway {
