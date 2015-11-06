@@ -213,8 +213,12 @@ Configure autoconnects in `application.conf`:
 ```
 reactivemq {
   autoconnect {
-    myConn = "nio://blah:61616"
-    secondConn = "vm://localhost"
+    myConn.address = "nio://blah:61616"
+    secondConn {
+      address = "vm://localhost"
+      username = user
+      password = pass
+    }
   }
 }
 ```
@@ -250,6 +254,8 @@ License
 Changelog
 ---------
 
+* **0.5.3**
+  * Allow automatic connections to be authenticated; the format in application.conf has changed but old configurations are still loaded correctly
 * **0.5.2**
   * Load ReActiveMQ as a system actor
   * Fix issue in Request-Reply wrt accessing actor state from a future leading to NPEs
