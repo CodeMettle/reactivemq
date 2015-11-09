@@ -84,4 +84,36 @@ class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
             config.autoConnections("server2").password.value should be ("pass")
         }
     }
+
+    it should "ignore blank credentials" in {
+        val newConfig =
+            """reactivemq {
+              |  autoconnect {
+              |    server1 {
+              |      address = "address.to.s1"
+              |      username = null
+              |      //password =
+              |    }
+              |    server2 {
+              |      address = "address.to.s2"
+              |      username = ""
+              |      //password =
+              |    }
+              |  }
+              |}
+            """.stripMargin
+
+        confTestCfg(newConfig) { config ⇒
+            config.autoConnections should contain key "server1"
+            config.autoConnections should contain key "server2"
+
+            config.autoConnections("server1").address should be ("address.to.s1")
+            config.autoConnections("server2").address should be ("address.to.s2")
+
+            config.autoConnections("server1").username should be ('empty)
+            config.autoConnections("server2").username should be ('empty)
+            config.autoConnections("server1").password should be ('empty)
+            config.autoConnections("server2").password should be ('empty)
+        }
+    }
 }

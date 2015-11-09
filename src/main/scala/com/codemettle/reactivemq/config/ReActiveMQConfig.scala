@@ -23,11 +23,18 @@ import scala.concurrent.duration.FiniteDuration
 case class AutoConnectConfig(address: String, username: Option[String] = None, password: Option[String] = None)
 
 object AutoConnectConfig {
+    private val ws = """^\s*$""".r
+
     def parseValue(cv: ConfigValue): AutoConnectConfig = cv.valueType() match {
         case ConfigValueType.STRING ⇒ AutoConnectConfig(cv.unwrapped().asInstanceOf[String])
         case ConfigValueType.OBJECT ⇒
             val map = cv.unwrapped().asInstanceOf[ju.Map[String, String]].asScala
-            AutoConnectConfig(map("address"), map.get("username"), map.get("password"))
+            def fval(f: String) = map get f flatMap {
+                case null ⇒ None
+                case ws() ⇒ None
+                case v ⇒ Some(v)
+            }
+            AutoConnectConfig(map("address"), fval("username"), fval("password"))
 
         case _ ⇒ sys.error(s"$cv is not an OBJECT or STRING")
     }
