@@ -254,6 +254,8 @@ License
 Changelog
 ---------
 
+* **0.5.4**
+  * Oops - was treating empty/null credentials as valid and passing them on to AMQ
 * **0.5.3**
   * Allow automatic connections to be authenticated; the format in application.conf has changed but old configurations are still loaded correctly
 * **0.5.2**
