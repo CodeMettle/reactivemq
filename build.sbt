@@ -6,7 +6,7 @@ organization := "com.codemettle.reactivemq"
 
 name := "reactivemq"
 
-version := "0.5.5"
+version := "0.5.6-SNAPSHOT"
 
 description := "Akka-based ActiveMQ client"
 
