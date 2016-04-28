@@ -6,7 +6,7 @@ organization := "com.codemettle.reactivemq"
 
 name := "reactivemq"
 
-version := "0.5.5-SNAPSHOT"
+version := "0.5.5"
 
 description := "Akka-based ActiveMQ client"
 
@@ -36,7 +36,7 @@ pomExtra := {
 
 // Build
 
-crossScalaVersions := Seq("2.10.4", "2.11.5")
+crossScalaVersions := Seq("2.10.4", "2.11.7")
 
 scalaVersion := crossScalaVersions.value.last
 

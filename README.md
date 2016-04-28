@@ -254,6 +254,8 @@ License
 Changelog
 ---------
 
+* **0.5.5**
+  * Oops - request/reply `Producer` wasn't honoring the `requestTimeout` parameter 
 * **0.5.4**
   * Oops - was treating empty/null credentials as valid and passing them on to AMQ
 * **0.5.3**
