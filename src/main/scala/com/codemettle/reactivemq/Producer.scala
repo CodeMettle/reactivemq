@@ -105,7 +105,7 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
             } else {
                 val respActor = context
                     .actorOf(ResponseTransformer.props(requestTimeout, sender(), transformResponse), actorNamer.next())
-                connection.tell(RequestMessage(destination, newMsg), respActor)
+                connection.tell(RequestMessage(destination, newMsg, requestTimeout), respActor)
             }
     }
 }
