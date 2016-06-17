@@ -6,8 +6,6 @@ organization := "com.codemettle.reactivemq"
 
 name := "reactivemq"
 
-version := "0.5.6-SNAPSHOT"
-
 description := "Akka-based ActiveMQ client"
 
 startYear := Some(2015)
@@ -36,7 +34,7 @@ pomExtra := {
 
 // Build
 
-crossScalaVersions := Seq("2.10.4", "2.11.7")
+crossScalaVersions := Seq("2.11.8")
 
 scalaVersion := crossScalaVersions.value.last
 
@@ -89,6 +87,11 @@ apiMappings ++= {
         findManagedDependency(Deps.akkaActor) -> url(s"http://doc.akka.io/api/akka/${Versions.akka}/")
     )
 }
+
+// Release
+
+releasePublishArtifactsAction := PgpKeys.publishSigned.value
+releaseCrossBuild := true
 
 // Publish
 

@@ -254,6 +254,10 @@ License
 Changelog
 ---------
 
+* **1.0.0**
+  * Upgrade Akka to 2.4
+  * Drop support for Scala 2.10
+  * Compile with Java8
 * **0.5.5**
   * Oops - request/reply `Producer` wasn't honoring the `requestTimeout` parameter 
 * **0.5.4**

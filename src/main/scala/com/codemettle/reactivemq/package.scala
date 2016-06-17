@@ -20,7 +20,7 @@ package object reactivemq {
         def getFiniteDuration(path: String): FiniteDuration = {
             import spray.util.pimpConfig
 
-            u.getDuration(path) match {
+            pimpConfig(u).getDuration(path) match {
                 case fd: FiniteDuration ⇒ fd
                 case _ ⇒ throw new ConfigException.BadValue(path, "Not a FiniteDuration")
             }
