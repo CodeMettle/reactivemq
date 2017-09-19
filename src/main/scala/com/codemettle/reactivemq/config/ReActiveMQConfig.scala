@@ -11,7 +11,8 @@ package config
 import java.{util ⇒ ju}
 
 import com.typesafe.config.{Config, ConfigObject, ConfigValue, ConfigValueType}
-import spray.util.SettingsCompanion
+
+import com.codemettle.reactivemq.util.SettingsCompanion
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration

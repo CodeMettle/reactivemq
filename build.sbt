@@ -34,16 +34,22 @@ pomExtra := {
 
 // Build
 
-crossScalaVersions := Seq("2.11.8")
+crossScalaVersions := Seq("2.11.11", "2.12.3")
 
 scalaVersion := crossScalaVersions.value.last
 
 scalacOptions ++= Seq("-unchecked", "-feature", "-deprecation")
 
+scalacOptions += {
+    CrossVersion partialVersion scalaVersion.value match {
+        case Some((x, y)) if x >= 2 && y >= 12 ⇒ "-target:jvm-1.8"
+        case _ ⇒ "-target:jvm-1.6"
+    }
+}
+
 libraryDependencies ++= Seq(
     Deps.akkaActor % Provided,
-    Deps.activemqClient % Provided,
-    Deps.sprayUtil
+    Deps.activemqClient % Provided
 )
 
 libraryDependencies ++= Seq(
@@ -57,16 +63,6 @@ libraryDependencies ++= Seq(
     Deps.logback,
     Deps.scalaTest
 ) map (_ % Test)
-
-//libraryDependencies += {
-//    CrossVersion partialVersion scalaVersion.value match {
-//        case Some((2, 10)) => Deps.ficus2_10
-//        case Some((2, 11)) => Deps.ficus2_11
-//        case _ => sys.error("Ficus dependency needs updating")
-//    }
-//} % Test
-//
-//publishArtifact in Test := true
 
 autoAPIMappings := true
 
