@@ -7,9 +7,9 @@
  */
 package com.codemettle
 
-import com.typesafe.config.{Config, ConfigException}
+import com.typesafe.config.Config
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 /**
  * @author steven
@@ -17,17 +17,10 @@ import scala.concurrent.duration.FiniteDuration
  */
 package object reactivemq {
     implicit class RichConfig(val u: Config) extends AnyVal {
-        def getFiniteDuration(path: String): FiniteDuration = {
-            import spray.util.pimpConfig
-
-            pimpConfig(u).getDuration(path) match {
+        def getFiniteDuration(path: String): FiniteDuration =
+            u.getDuration(path).toNanos.nanos.toCoarsest match {
                 case fd: FiniteDuration ⇒ fd
-                case _ ⇒ throw new ConfigException.BadValue(path, "Not a FiniteDuration")
+                case _ ⇒ sys.error("can't happen")
             }
-        }
-    }
-
-    implicit class OldOption[T](val u: Option[T]) extends AnyVal {
-        def contains(item: T) = u exists (_ == item)
     }
 }

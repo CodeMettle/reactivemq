@@ -96,9 +96,7 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
 
                 if (swallowSendStatus) {
                     implicit val timeout = Timeout(sendTimeout + 5.seconds)
-                    (connection ? sendMessage) onFailure {
-                        case t ⇒ self ! LogError(t, newMsg)
-                    }
+                    (connection ? sendMessage).failed.foreach(t ⇒ self ! LogError(t, newMsg))
                 } else {
                     connection forward sendMessage
                 }

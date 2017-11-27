@@ -57,7 +57,7 @@ class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: Extende
     val autoConnects: Map[String, ActorRef] = Try {
         import system.dispatcher
         import akka.pattern.ask
-        import spray.util.pimpFuture
+        import com.codemettle.reactivemq.util._
         implicit val timeout = Timeout(config.autoconnectTimeout + 2.seconds)
 
         val futures = config.autoConnections map (e ⇒ (manager ? AutoConnect(e._2, e._1, config.autoconnectTimeout)).mapTo[ConnectionEstablished])

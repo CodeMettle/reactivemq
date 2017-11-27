@@ -1,7 +1,22 @@
+dist: trusty
 language: scala
 scala:
-  - 2.10.4
-  - 2.11.5
-jdk:
-  - oraclejdk7
-  - openjdk6
+  - 2.12.4
+  - 2.11.12
+env:
+  - JDK=oraclejdk8
+  - JDK=openjdk7 # Oracle JDK7 is end-of-life
+  - JDK=openjdk6 # Oracle JDK6 is end-of-life
+addons:
+  apt:
+    packages:
+      - openjdk-6-jdk
+before_script:
+  - jdk_switcher use $JDK
+matrix:
+  # scala 2.12 requires java 8
+  exclude:
+    - scala: 2.12.4
+      env: JDK=oraclejdk7
+    - scala: 2.12.4
+      env: JDK=openjdk6

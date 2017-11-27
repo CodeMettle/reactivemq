@@ -10,6 +10,8 @@ package com.codemettle.reactivemq.config
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
+import com.codemettle.reactivemq.util._
+
 import akka.actor.ActorSystem
 import scala.concurrent.duration._
 import scala.util.control.Exception.ultimately
@@ -21,7 +23,10 @@ import scala.util.control.Exception.ultimately
 class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
     private def confTestCfg(cfg: String)(f: (ReActiveMQConfig) ⇒ Unit) = {
         val system = ActorSystem("Test", ConfigFactory parseString cfg withFallback ConfigFactory.load())
-        ultimately(system.shutdown()) {
+
+        def shutdown() = system.terminate().await
+
+        ultimately(shutdown()) {
             f(ReActiveMQConfig(system))
         }
     }

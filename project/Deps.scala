@@ -20,5 +20,4 @@ object Deps {
     val jclOverSlf4j = "org.slf4j" % "jcl-over-slf4j" % Versions.slf4j
     val logback = "ch.qos.logback" % "logback-classic" % Versions.logback
     val scalaTest = "org.scalatest" %% "scalatest" % Versions.scalaTest
-    val sprayUtil = "io.spray" %% "spray-util" % Versions.spray
 }
