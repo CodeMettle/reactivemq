@@ -26,7 +26,7 @@ sbt:
 
 ```scala
 libraryDependencies ++= Seq(
-    "com.codemettle.reactivemq" %% "reactivemq" % "0.5.0",
+    "com.codemettle.reactivemq" %% "reactivemq" % "1.0.1",
     "org.apache.activemq" % "activemq-client" % "version",
     "com.typesafe.akka" %% "akka-actor" % "version"
 )
@@ -38,7 +38,7 @@ Maven:
 <dependency>
     <groupId>com.codemettle.reactivemq</groupId>
     <artifactId>reactivemq</artifactId>
-    <version>0.5.0</version>
+    <version>1.0.1</version>
 </dependency>
 <dependency>
     <groupId>org.apache.activemq</groupId>
