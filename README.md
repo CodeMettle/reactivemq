@@ -254,6 +254,12 @@ License
 Changelog
 ---------
 
+* **1.0.1**
+  * Remove Spray dependency
+  * Upgrade dependencies
+  * Add support for Scala 2.12
+  * Fix Travis configuration
+  * Thanks to [@barredijkstra](https://github.com/barredijkstra) for much of this
 * **1.0.0**
   * Upgrade Akka to 2.4
   * Drop support for Scala 2.10
