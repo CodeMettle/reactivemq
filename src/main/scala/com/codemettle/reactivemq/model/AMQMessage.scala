@@ -13,6 +13,7 @@ import javax.jms
 
 import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
@@ -27,6 +28,8 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
             case s: String ⇒ connection createTextMessage s
 
             case s: jio.Serializable ⇒ connection createObjectMessage s
+
+            case b: Array[Byte] ⇒ connection createBytesMessage b
 
             case _ ⇒ sys.error(s"$body isn't serializable")
         }
@@ -48,6 +51,8 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
     }
 
     def withCorrelationID(corr: String) = withProperty(_.copy(correlationID = Some(corr)))
+
+    def withType(`type`: String) = withProperty(_.copy(`type` = Some(`type`)))
 
     def withProperty(f: (JMSMessageProperties) ⇒ JMSMessageProperties) = {
         val newProps = f(properties)
@@ -89,10 +94,30 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
 
 object AMQMessage {
     def from(msg: jms.Message) = {
+
+        def readBytes(msg: jms.BytesMessage, bufferSize: Int = 4096): Array[Byte] = {
+            if (msg.getBodyLength > Int.MaxValue)
+                sys.error(s"Message too large, unable to read ${msg.getBodyLength} bytes of data")
+
+            val buff = new Array[Byte](Math.min(msg.getBodyLength, bufferSize).toInt)
+
+            @tailrec def read(data: Array[Byte]): Array[Byte] = {
+                if (msg.getBodyLength == data.length)
+                    data
+                else {
+                    val len = msg.readBytes(buff)
+                    val d = buff.take(len)
+                    read(data ++ d)
+                }
+            }
+            read(Array.emptyByteArray)
+        }
+
         val body = msg match {
             case tm: jms.TextMessage ⇒ tm.getText
             case om: jms.ObjectMessage ⇒ om.getObject
-            case  m: jms.Message ⇒ null.asInstanceOf[Serializable]
+            case bm: jms.BytesMessage ⇒ readBytes(bm)
+            case m: jms.Message ⇒ null.asInstanceOf[Serializable]
             case _ ⇒ sys.error(s"Don't grok a ${msg.getClass.getSimpleName}")
         }
 
