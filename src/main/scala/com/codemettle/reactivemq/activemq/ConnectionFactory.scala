@@ -10,7 +10,7 @@ package com.codemettle.reactivemq.activemq
 import javax.jms
 
 import org.apache.activemq.ActiveMQConnectionFactory
-import org.apache.activemq.command.{ActiveMQObjectMessage, ActiveMQTextMessage}
+import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQObjectMessage, ActiveMQTextMessage}
 import java.{io ⇒ jio}
 import com.codemettle.reactivemq.activemq.ConnectionFactory.{Connection, ConnectionKey}
 import com.codemettle.reactivemq.model.{TempTopic, TempQueue}
@@ -61,6 +61,12 @@ private[reactivemq] object ConnectionFactory {
         def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage = {
             val msg = new ActiveMQObjectMessage
             msg setObject obj
+            msg
+        }
+
+        def createBytesMessage(data: => Array[Byte]): jms.BytesMessage = {
+            val msg = new ActiveMQBytesMessage
+            msg writeBytes data
             msg
         }
     }
