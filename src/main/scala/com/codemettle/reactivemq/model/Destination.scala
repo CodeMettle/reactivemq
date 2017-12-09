@@ -9,6 +9,7 @@ package com.codemettle.reactivemq.model
 
 import javax.jms
 
+import com.codemettle.reactivemq.DestinationCreator
 import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
 
 /**
@@ -17,17 +18,19 @@ import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
  */
 sealed trait Destination {
     def name: String
-    def jmsDestination(connection: Connection): jms.Destination
+    def jmsDestination(implicit dc: DestinationCreator): jms.Destination
 }
 
 @SerialVersionUID(1L)
 case class Queue(name: String) extends Destination {
-    override def jmsDestination(connection: Connection): jms.Destination = connection createQueue name
+    override def jmsDestination(implicit dc: DestinationCreator): jms.Destination =
+        implicitly[DestinationCreator] createQueue name
 }
 
 @SerialVersionUID(1L)
 case class Topic(name: String) extends Destination {
-    override def jmsDestination(connection: Connection): jms.Destination = connection createTopic name
+    override def jmsDestination(implicit dc: DestinationCreator): jms.Destination =
+        implicitly[DestinationCreator] createTopic name
 }
 
 @SerialVersionUID(1L)
@@ -35,7 +38,7 @@ case class TempQueue(jmsDest: jms.TemporaryQueue) extends Destination {
 
     override def name: String = jmsDest.getQueueName
 
-    override def jmsDestination(connection: Connection): jms.Destination = jmsDest
+    override def jmsDestination(implicit dc: DestinationCreator): jms.Destination = jmsDest
 }
 
 object TempQueue {
@@ -47,7 +50,7 @@ case class TempTopic(jmsDest: jms.TemporaryTopic) extends Destination {
 
     override def name: String = jmsDest.getTopicName
 
-    override def jmsDestination(connection: Connection): jms.Destination = jmsDest
+    override def jmsDestination(implicit dc: DestinationCreator): jms.Destination = jmsDest
 }
 
 object TempTopic {
