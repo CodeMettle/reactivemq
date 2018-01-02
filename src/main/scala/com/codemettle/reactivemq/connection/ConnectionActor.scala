@@ -23,11 +23,11 @@ import scala.util.{Failure, Success, Try}
  */
 object ConnectionActor {
     def props(conn: Connection, connectionActor: ActorRef) = {
-        Props(new ConnectionActor(conn, connectionActor))
+        Props(new ConnectionActor(connectionActor)(conn))
     }
 }
 
-class ConnectionActor(protected val connection: Connection, protected val sendRepliesAs: ActorRef)
+class ConnectionActor(protected val sendRepliesAs: ActorRef)(implicit protected val connection: Connection)
     extends Actor with DestinationManager with ProducerManager with ConsumerManager with SendRepliesAs with ActorLogging {
     import context.dispatcher
 
@@ -54,7 +54,7 @@ class ConnectionActor(protected val connection: Connection, protected val sendRe
         case SendMessage(dest, msg, ttl, _) ⇒ routeFutureFromSRA(sender()) {
             val props = msg.properties
             getProducer(dest) map (prod ⇒ {
-                prod.send(msg.jmsMessage(connection), props.deliveryMode, props.priority, ttl)
+                prod.send(msg.jmsMessage, props.deliveryMode, props.priority, ttl)
                 SendAck
             })
         }

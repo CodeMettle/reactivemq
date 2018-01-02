@@ -8,11 +8,10 @@
 package com.codemettle.reactivemq
 package model
 
-import java.{io => jio, util => ju}
+import java.{io ⇒ jio, util ⇒ ju}
 import javax.jms
 
-import com.codemettle.reactivemq.activemq.ConnectionFactory.Connection
-
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
@@ -22,11 +21,13 @@ import scala.reflect.ClassTag
  */
 @SerialVersionUID(1L)
 case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessageProperties(), headers: Map[String, Any] = Map.empty) {
-    def jmsMessage(connection: Connection) = {
+    def jmsMessage(implicit mc: MessageCreator, dc: DestinationCreator): jms.Message = {
         val msg = body match {
-            case s: String ⇒ connection createTextMessage s
+            case s: String ⇒ mc createTextMessage s
 
-            case s: jio.Serializable ⇒ connection createObjectMessage s
+            case b: Array[Byte] ⇒ mc createBytesMessage b
+
+            case s: jio.Serializable ⇒ mc createObjectMessage s
 
             case _ ⇒ sys.error(s"$body isn't serializable")
         }
@@ -36,8 +37,8 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
         properties.messageID foreach msg.setJMSMessageID
         msg.setJMSTimestamp(properties.timestamp)
         properties.correlationID foreach msg.setJMSCorrelationID
-        properties.replyTo map (_ jmsDestination connection) foreach msg.setJMSReplyTo
-        properties.destination map (_ jmsDestination connection) foreach msg.setJMSDestination
+        properties.replyTo.map(_.jmsDestination) foreach msg.setJMSReplyTo
+        properties.destination.map(_.jmsDestination) foreach msg.setJMSDestination
         msg.setJMSDeliveryMode(properties.deliveryMode)
         msg.setJMSRedelivered(properties.redelivered)
         properties.`type` foreach msg.setJMSType
@@ -48,6 +49,8 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
     }
 
     def withCorrelationID(corr: String) = withProperty(_.copy(correlationID = Some(corr)))
+
+    def withType(`type`: String) = withProperty(_.copy(`type` = Some(`type`)))
 
     def withProperty(f: (JMSMessageProperties) ⇒ JMSMessageProperties) = {
         val newProps = f(properties)
@@ -89,9 +92,29 @@ case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessagePr
 
 object AMQMessage {
     def from(msg: jms.Message) = {
+
+        def readBytes(msg: jms.BytesMessage, bufferSize: Int = 4096): Array[Byte] = {
+            if (msg.getBodyLength > Int.MaxValue)
+                sys.error(s"Message too large, unable to read ${msg.getBodyLength} bytes of data")
+
+            val buff = new Array[Byte](Math.min(msg.getBodyLength, bufferSize).toInt)
+
+            @tailrec def read(data: Array[Byte]): Array[Byte] = {
+                if (msg.getBodyLength == data.length)
+                    data
+                else {
+                    val len = msg.readBytes(buff)
+                    val d = buff.take(len)
+                    read(data ++ d)
+                }
+            }
+            read(Array.emptyByteArray)
+        }
+
         val body = msg match {
             case tm: jms.TextMessage ⇒ tm.getText
             case om: jms.ObjectMessage ⇒ om.getObject
+            case bm: jms.BytesMessage ⇒ readBytes(bm)
             case  m: jms.Message ⇒ null.asInstanceOf[Serializable]
             case _ ⇒ sys.error(s"Don't grok a ${msg.getClass.getSimpleName}")
         }

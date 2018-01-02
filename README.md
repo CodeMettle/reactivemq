@@ -254,6 +254,8 @@ License
 Changelog
 ---------
 
+* **1.0.2**
+  * Support JMS `BytesMessage`s (by [@barredijkstra](https://github.com/barredijkstra))
 * **1.0.1**
   * Remove Spray dependency
   * Upgrade dependencies

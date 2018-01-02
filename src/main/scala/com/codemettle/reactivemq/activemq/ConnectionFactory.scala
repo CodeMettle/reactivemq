@@ -7,13 +7,14 @@
  */
 package com.codemettle.reactivemq.activemq
 
-import javax.jms
-
-import org.apache.activemq.ActiveMQConnectionFactory
-import org.apache.activemq.command.{ActiveMQObjectMessage, ActiveMQTextMessage}
 import java.{io ⇒ jio}
+import javax.jms
+import javax.jms.{BytesMessage, ObjectMessage, TextMessage}
+
 import com.codemettle.reactivemq.activemq.ConnectionFactory.{Connection, ConnectionKey}
-import com.codemettle.reactivemq.model.{TempTopic, TempQueue}
+import com.codemettle.reactivemq.model.{TempQueue, TempTopic}
+import com.codemettle.reactivemq.{DestinationCreator, MessageCreator}
+import org.apache.activemq.ActiveMQConnectionFactory
 
 import scala.util.control.Exception.ignoring
 import scala.util.control.NonFatal
@@ -29,12 +30,19 @@ private[reactivemq] object ConnectionFactory {
 
     private[reactivemq] case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)], staticName: Option[String])
 
-    case class Connection(jmsConn: jms.Connection, jmsSess: jms.Session, owner: ConnectionFactory) {
+    case class Connection(jmsConn: jms.Connection, jmsSess: jms.Session, owner: ConnectionFactory)
+                         (implicit val mc: MessageCreator) extends DestinationCreator with MessageCreator {
         def setExceptionListener(listener: jms.JMSException ⇒ Unit) = {
             jmsConn.setExceptionListener(new jms.ExceptionListener {
                 override def onException(exception: jms.JMSException): Unit = listener(exception)
             })
         }
+
+        override def createTextMessage(text: String): TextMessage = mc.createTextMessage(text)
+
+        override def createObjectMessage(obj: jio.Serializable): ObjectMessage = mc.createObjectMessage(obj)
+
+        override def createBytesMessage(data: ⇒ Array[Byte]): BytesMessage = mc.createBytesMessage(data)
 
         def createConsumer(dest: jms.Destination) = jmsSess createConsumer dest
 
@@ -44,24 +52,12 @@ private[reactivemq] object ConnectionFactory {
 
         def createTemporaryTopic: TempTopic = TempTopic(jmsSess.createTemporaryTopic())
 
-        def createQueue(name: String): jms.Queue = jmsSess createQueue name
+        override def createQueue(name: String): jms.Queue = jmsSess createQueue name
 
-        def createTopic(name: String): jms.Topic = jmsSess createTopic name
+        override def createTopic(name: String): jms.Topic = jmsSess createTopic name
 
         def close(swallowExceptions: Boolean = true) = {
             owner.closeConnection(this, swallowExceptions)
-        }
-
-        def createTextMessage(text: String): jms.TextMessage = {
-            val msg = new ActiveMQTextMessage
-            msg setText text
-            msg
-        }
-
-        def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage = {
-            val msg = new ActiveMQObjectMessage
-            msg setObject obj
-            msg
         }
     }
 }
