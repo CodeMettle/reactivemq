@@ -15,6 +15,7 @@ import org.apache.activemq.broker.BrokerService
 import org.apache.activemq.camel.component.ActiveMQComponent.activeMQComponent
 import org.apache.activemq.security.{AuthenticationUser, SimpleAuthenticationPlugin}
 import org.apache.activemq.store.memory.MemoryPersistenceAdapter
+import org.apache.camel.CamelContext
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -39,9 +40,9 @@ object VmBrokerTests {
 
     def logConfig = s"akka.loglevel = ${if (nonErrorLogging) "INFO" else "ERROR"}"
 
-    def logLevel = if (nonErrorLogging) Level.INFO else Level.ERROR
+    def logLevel: Level = if (nonErrorLogging) Level.INFO else Level.ERROR
 
-    def testConfig = List(reconnConfig, logConfig) mkString "\n"
+    def testConfig: String = List(reconnConfig, logConfig) mkString "\n"
 }
 
 class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpecLike with Matchers with BeforeAndAfterAll with OptionValues {
@@ -66,7 +67,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         }
     }
 
-    private def startBroker(username: Option[String] = None, password: Option[String] = None) = {
+    private def startBroker(username: Option[String] = None, password: Option[String] = None): Unit = {
         val broker = new BrokerService
         for (u ← username; p ← password) {
             def authPlug = {
@@ -90,12 +91,12 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         this.broker = Some(broker)
     }
 
-    private def stopBroker() = {
+    private def stopBroker(): Unit = {
         broker foreach (_.stop())
         broker = None
     }
 
-    private def restartBroker(username: Option[String] = None, password: Option[String] = None) = {
+    private def restartBroker(username: Option[String] = None, password: Option[String] = None): Unit = {
         stopBroker()
         startBroker(username, password)
     }
@@ -132,7 +133,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
     private def getConnection = getConnectionEstablished.connectionActor
 
-    private def closeConnection(conn: ActorRef) = {
+    private def closeConnection(conn: ActorRef): Unit = {
         conn ! CloseConnection
     }
 
@@ -141,11 +142,11 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         probe.send(conn, SubscribeToConnectionStatus)
 
-        def waitForConnection() = probe.expectMsgType[ConnectionReestablished]
+        def waitForConnection(): ConnectionReestablished = probe.expectMsgType[ConnectionReestablished]
 
-        def waitForDisconnect() = probe.expectMsgType[ConnectionInterrupted]
+        def waitForDisconnect(): ConnectionInterrupted = probe.expectMsgType[ConnectionInterrupted]
 
-        def done() = system stop probe.ref
+        def done(): Unit = system stop probe.ref
     }
 
     "ReActiveMQ" should "connect" in {
@@ -243,7 +244,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         })
 
         val camelExt = CamelExtension(system)
-        implicit val camelCtx = camelExt.context
+        implicit val camelCtx: CamelContext = camelExt.context
         camelExt.template.sendBody("embedded:recvtest", "hi")
 
         val testmsg = receiver.expectMsgType[CamelMessage]
@@ -404,7 +405,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
             override def consumeFrom: Queue = Queue("testmsgidq")
 
-            def receive = {
+            override def receive: Receive = {
                 case AMQMessage(body, props, _) ⇒
                     probe.ref ! props
                     sender() ! body
@@ -416,7 +417,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
             override def consumeFrom: Queue = Queue("testmsgidrespq")
 
-            def receive = {
+            override def receive: Receive = {
                 case msg ⇒ probe2.ref ! msg
             }
         })
@@ -487,14 +488,14 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     class TestQueueConsumer(qName: String, val connection: ActorRef) extends QueueConsumer {
         def consumeFrom = Queue(qName)
 
-        def receive = {
+        override def receive: Receive = {
             case AMQMessage(msg: String, _, _) ⇒ sender() ! msg.reverse
             case AMQMessage(msg: jl.Integer, _, _) ⇒ sender() ! Int.box(0 - msg.intValue())
             case msg: AMQMessage ⇒ sender() ! AMQMessage(msg.headers("replyWith"), headers = Map("original" → msg.body))
         }
     }
 
-    def doConsumeAndRespond(conn: ActorRef) = {
+    def doConsumeAndRespond(conn: ActorRef): Unit = {
         val cons = TestActorRef(new TestQueueConsumer("testQueueCons", conn))
 
         val probe = TestProbe()
@@ -543,7 +544,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     class TestOnewayQueueConsumer(qName: String, fwdTo: ActorRef, val connection: ActorRef) extends QueueConsumer with Oneway {
         def consumeFrom = Queue(qName)
 
-        def receive = {
+        override def receive: Receive = {
             case msg ⇒ fwdTo forward msg
         }
     }
@@ -591,7 +592,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     class TestTopicConsumer(tName: String, val connection: ActorRef, probe: TestProbe) extends TopicConsumer {
         def consumeFrom = Topic(tName)
 
-        def receive = {
+        override def receive: Receive = {
             case msg ⇒ probe.ref forward msg
         }
     }
@@ -636,7 +637,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         probe2.send(prod, "test")
         consumer.expectMsgType[AMQMessage].body should equal ("test")
-        probe2.expectNoMsg(500.millis)
+        probe2.expectNoMessage(500.millis)
 
         system stop prod
         system stop consumer.ref
@@ -742,8 +743,8 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
     class TestTransformResponseProducer(val destination: Destination, val connection: ActorRef) extends Producer {
         override protected def transformResponse(msg: Any): Any = msg match {
-            case a@AMQMessage(str: String, _, _) ⇒ str.reverse
-            case a@AMQMessage(num: jl.Integer, _, _) ⇒ 0 - num.intValue()
+            case AMQMessage(str: String, _, _) ⇒ str.reverse
+            case AMQMessage(num: jl.Integer, _, _) ⇒ 0 - num.intValue()
             case _ ⇒ msg
         }
     }

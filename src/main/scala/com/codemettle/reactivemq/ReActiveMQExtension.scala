@@ -24,12 +24,12 @@ import scala.util.{Success, Failure, Try}
  *
  */
 object ReActiveMQExtensionImpl {
-    private[reactivemq] class ConnectionFactoryHolder {
+    private[reactivemq] class ConnectionFactoryHolder(config: ReActiveMQConfig) {
         private var connFacts = Map.empty[ConnectionKey, ConnectionFactory]
 
         def getConnectionFactory(forKey: ConnectionKey): ConnectionFactory = synchronized {
             connFacts.getOrElse(forKey, {
-                val ret = ConnectionFactory(forKey)
+                val ret = ConnectionFactory(forKey, config)
                 connFacts += (forKey → ret)
                 ret
             })
@@ -40,7 +40,7 @@ object ReActiveMQExtensionImpl {
             connFacts -= forKey
         }
 
-        def cleanup() = synchronized {
+        def cleanup(): Unit = synchronized {
             connFacts.values foreach (_.cleanup())
             connFacts = Map.empty
         }
@@ -48,17 +48,17 @@ object ReActiveMQExtensionImpl {
 }
 
 class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: ExtendedActorSystem) extends Extension {
-    private val connFactHolder = new ConnectionFactoryHolder
+    private val connFactHolder = new ConnectionFactoryHolder(ReActiveMQConfig(system))
 
     system registerOnTermination connFactHolder.cleanup()
 
-    val manager = system.systemActorOf(Manager props connFactHolder, "reActiveMQ")
+    final val manager = system.systemActorOf(Manager props connFactHolder, "reActiveMQ")
 
     val autoConnects: Map[String, ActorRef] = Try {
         import system.dispatcher
         import akka.pattern.ask
         import com.codemettle.reactivemq.util._
-        implicit val timeout = Timeout(config.autoconnectTimeout + 2.seconds)
+        implicit val timeout: Timeout = Timeout(config.autoconnectTimeout + 2.seconds)
 
         val futures = config.autoConnections map (e ⇒ (manager ? AutoConnect(e._2, e._1, config.autoconnectTimeout)).mapTo[ConnectionEstablished])
 
@@ -74,9 +74,9 @@ class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: Extende
 }
 
 object ReActiveMQExtension extends ExtensionId[ReActiveMQExtensionImpl] with ExtensionIdProvider {
-    override def createExtension(system: ExtendedActorSystem) = {
+    override def createExtension(system: ExtendedActorSystem): ReActiveMQExtensionImpl = {
         new ReActiveMQExtensionImpl(ReActiveMQConfig(system))(system)
     }
 
-    override def lookup() = ReActiveMQExtension
+    override def lookup(): ExtensionId[ReActiveMQExtensionImpl] = ReActiveMQExtension
 }

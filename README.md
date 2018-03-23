@@ -3,6 +3,7 @@ ReActiveMQ
 
 An [ActiveMQ](http://activemq.apache.org) client built on [Akka](http://akka.io)
 [![Build Status](https://travis-ci.org/CodeMettle/reactivemq.svg?branch=master)](https://travis-ci.org/CodeMettle/reactivemq)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.codemettle.reactivemq/reactivemq_2.11/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.codemettle.reactivemq/reactivemq_2.11)
 
 The goal of ReActiveMQ is to provide an interface to ActiveMQ messaging that will feel familiar to Akka developers. At this point it is a fairly low-level connection-oriented interface that can consume AMQ queues and topics, send messages to endpoints, and do request-reply messaging, Camel-style, using temporary queues. More features will be added as necessary / requested.
 
@@ -38,7 +39,7 @@ Maven:
 <dependency>
     <groupId>com.codemettle.reactivemq</groupId>
     <artifactId>reactivemq</artifactId>
-    <version>1.0.2</version>
+    <version>1.5.0</version>
 </dependency>
 <dependency>
     <groupId>org.apache.activemq</groupId>
@@ -254,6 +255,10 @@ License
 Changelog
 ---------
 
+* **1.5.0**
+  * Upgrade ActiveMQ to 5.15
+  * Upgrade Akka to 2.5
+  * Add support for ActiveMQ's object serialization security; all are trusted by default
 * **1.0.2**
   * Support JMS `BytesMessage`s (by [@barredijkstra](https://github.com/barredijkstra))
 * **1.0.1**

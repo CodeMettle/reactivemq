@@ -47,7 +47,8 @@ object AutoConnectConfig {
 case class ReActiveMQConfig(connFactTimeout: FiniteDuration, reestablishConnections: Boolean,
                             connectionReestablishPeriod: FiniteDuration, producerIdleTimeout: FiniteDuration,
                             logConsumers: Boolean, queueConsumerTimeout: FiniteDuration,
-                            autoConnections: Map[String, AutoConnectConfig], autoconnectTimeout: FiniteDuration)
+                            autoConnections: Map[String, AutoConnectConfig], autoconnectTimeout: FiniteDuration,
+                            trustedPackages: Seq[String], trustAllPackages: Boolean)
 
 object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq") {
     override def fromSubConfig(c: Config): ReActiveMQConfig = {
@@ -59,7 +60,9 @@ object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq"
             c getBoolean        "log-consumers",
             c getFiniteDuration "default-queue-consumer-reply-timeout",
             AutoConnectConfig parse c.getObject("autoconnect"),
-            c getFiniteDuration "autoconnect-timeout"
+            c getFiniteDuration "autoconnect-timeout",
+            c.getStringList("trusted-packages").asScala.toList,
+            c getBoolean        "trust-all-packages"
         )
     }
 }

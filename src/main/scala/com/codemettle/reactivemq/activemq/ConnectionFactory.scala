@@ -7,14 +7,16 @@
  */
 package com.codemettle.reactivemq.activemq
 
-import java.{io ⇒ jio}
+import java.{io ⇒ jio, util ⇒ ju}
+
 import javax.jms
 import javax.jms.{BytesMessage, ObjectMessage, TextMessage}
+import org.apache.activemq.ActiveMQConnectionFactory
 
 import com.codemettle.reactivemq.activemq.ConnectionFactory.{Connection, ConnectionKey}
+import com.codemettle.reactivemq.config.ReActiveMQConfig
 import com.codemettle.reactivemq.model.{TempQueue, TempTopic}
 import com.codemettle.reactivemq.{DestinationCreator, MessageCreator}
-import org.apache.activemq.ActiveMQConnectionFactory
 
 import scala.util.control.Exception.ignoring
 import scala.util.control.NonFatal
@@ -24,15 +26,13 @@ import scala.util.control.NonFatal
  *
  */
 private[reactivemq] object ConnectionFactory {
-    def apply(key: ConnectionKey) = {
-        new ConnectionFactory(key)
-    }
+    def apply(key: ConnectionKey, config: ReActiveMQConfig) = new ConnectionFactory(key, config)
 
     private[reactivemq] case class ConnectionKey(brokerUrl: String, userAndPass: Option[(String, String)], staticName: Option[String])
 
     case class Connection(jmsConn: jms.Connection, jmsSess: jms.Session, owner: ConnectionFactory)
                          (implicit val mc: MessageCreator) extends DestinationCreator with MessageCreator {
-        def setExceptionListener(listener: jms.JMSException ⇒ Unit) = {
+        def setExceptionListener(listener: (jms.JMSException) ⇒ Unit): Unit = {
             jmsConn.setExceptionListener(new jms.ExceptionListener {
                 override def onException(exception: jms.JMSException): Unit = listener(exception)
             })
@@ -44,9 +44,9 @@ private[reactivemq] object ConnectionFactory {
 
         override def createBytesMessage(data: ⇒ Array[Byte]): BytesMessage = mc.createBytesMessage(data)
 
-        def createConsumer(dest: jms.Destination) = jmsSess createConsumer dest
+        def createConsumer(dest: jms.Destination): jms.MessageConsumer = jmsSess createConsumer dest
 
-        def createProducer(dest: jms.Destination) = jmsSess createProducer dest
+        def createProducer(dest: jms.Destination): jms.MessageProducer = jmsSess createProducer dest
 
         def createTemporaryQueue: TempQueue = TempQueue(jmsSess.createTemporaryQueue())
 
@@ -56,27 +56,30 @@ private[reactivemq] object ConnectionFactory {
 
         override def createTopic(name: String): jms.Topic = jmsSess createTopic name
 
-        def close(swallowExceptions: Boolean = true) = {
+        def close(swallowExceptions: Boolean = true): Unit = {
             owner.closeConnection(this, swallowExceptions)
         }
     }
 }
 
-private[reactivemq] class ConnectionFactory(key: ConnectionKey) {
+private[reactivemq] class ConnectionFactory(key: ConnectionKey, config: ReActiveMQConfig) {
     private val factory = key.userAndPass.fold(new ActiveMQConnectionFactory(key.brokerUrl))(
         uandp ⇒ new ActiveMQConnectionFactory(uandp._1, uandp._2, key.brokerUrl))
+    factory.setTrustAllPackages(config.trustAllPackages)
+    if (config.trustedPackages.nonEmpty)
+      factory.setTrustedPackages(ju.Arrays.asList(config.trustedPackages: _*))
 
     private var connections = Set.empty[Connection]
 
-    private def storeConnection(conn: Connection) = synchronized {
+    private def storeConnection(conn: Connection): Unit = synchronized {
         connections += conn
     }
 
-    private[activemq] def removeConnection(conn: Connection) = synchronized {
+    private[activemq] def removeConnection(conn: Connection): Unit = synchronized {
         connections -= conn
     }
 
-    private[activemq] def closeConnection(connection: Connection, swallowExceptions: Boolean) = {
+    private[activemq] def closeConnection(connection: Connection, swallowExceptions: Boolean): Unit = {
         if (swallowExceptions) {
             ignoring(classOf[Exception])(connection.jmsSess.close())
             ignoring(classOf[Exception])(connection.jmsConn.close())
@@ -108,13 +111,13 @@ private[reactivemq] class ConnectionFactory(key: ConnectionKey) {
         }
     }
 
-    private[reactivemq] def cleanup() = {
+    private[reactivemq] def cleanup(): Unit = {
         while (connections.nonEmpty) {
             connections.headOption foreach (c ⇒ closeConnection(c, swallowExceptions = true))
         }
     }
 
-    override def toString = {
+    override def toString: String = {
         val authStr = key.userAndPass.fold("")(e ⇒ s", user=${e._1}")
         val staticNameStr = key.staticName.fold("")(n ⇒ s", staticName=$n")
         s"ConnectionFactory(${key.brokerUrl}$authStr$staticNameStr)"
