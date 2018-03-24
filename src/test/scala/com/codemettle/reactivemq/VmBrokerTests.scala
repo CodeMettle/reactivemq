@@ -15,7 +15,7 @@ import org.apache.activemq.broker.BrokerService
 import org.apache.activemq.camel.component.ActiveMQComponent.activeMQComponent
 import org.apache.activemq.security.{AuthenticationUser, SimpleAuthenticationPlugin}
 import org.apache.activemq.store.memory.MemoryPersistenceAdapter
-import org.apache.camel.CamelContext
+import org.apache.camel
 import org.scalatest._
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -24,9 +24,10 @@ import com.codemettle.reactivemq.VmBrokerTests.{logLevel, nonErrorLogging, testC
 import com.codemettle.reactivemq.model._
 
 import akka.actor._
-import akka.camel.{CamelExtension, CamelMessage, Consumer}
 import akka.testkit.{TestActorRef, TestKit, TestProbe}
+import scala.collection.JavaConverters._
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Promise}
 import scala.util.{Failure, Random, Success, Try}
 
 /**
@@ -101,15 +102,35 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         startBroker(username, password)
     }
 
+    private val camelContext = new camel.impl.DefaultCamelContext()
+    camelContext.start()
+    private val producer = camelContext.createProducerTemplate()
+
     override protected def beforeAll(): Unit = {
         setLogging()
 
         startBroker()
 
-        CamelExtension(system).context.addComponent("embedded", activeMQComponent(s"vm://$brokerName?create=false"))
+        val p = Promise[Unit]()
+
+        val lss = new camel.support.LifecycleStrategySupport {
+            override def onComponentAdd(name: String, component: camel.Component): Unit = {
+                if (name == "embedded")
+                    p.trySuccess({})
+            }
+        }
+        camelContext.addLifecycleStrategy(lss)
+
+        camelContext.addComponent("embedded", activeMQComponent(s"vm://$brokerName?create=false"))
+
+        Await.ready(p.future, Duration.Inf)
+
+        camelContext.setLifecycleStrategies(camelContext.getLifecycleStrategies.asScala.filterNot(_ == lss).asJava)
     }
 
     override protected def afterAll(): Unit = {
+        camelContext.stop()
+
         Thread.sleep(250)
 
         stopBroker()
@@ -235,48 +256,61 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         val conn = getConnection
 
         val receiver = TestProbe()
-        val cons = TestActorRef(new Consumer {
-            override def endpointUri: String = "embedded:recvtest"
 
-            override def receive: Actor.Receive = {
-                case m ⇒ receiver.ref ! m
+        val rb = new camel.builder.RouteBuilder() {
+            override def configure(): Unit = {
+                from("embedded:recvtest")
+                  .setExchangePattern(camel.ExchangePattern.InOnly)
+                  .bean(new AnyRef {
+                      def onMessage(m: camel.Message): Unit = {
+                        receiver.ref ! m
+                      }
+                  })
             }
-        })
+        }
 
-        val camelExt = CamelExtension(system)
-        implicit val camelCtx: CamelContext = camelExt.context
-        camelExt.template.sendBody("embedded:recvtest", "hi")
+        val p = Promise[Unit]()
 
-        val testmsg = receiver.expectMsgType[CamelMessage]
+        val lss = new camel.support.LifecycleStrategySupport {
+            override def onRoutesAdd(routes: ju.Collection[camel.Route]): Unit = {
+                p.trySuccess({})
+            }
+        }
+        camelContext.addLifecycleStrategy(lss)
+        camelContext.addRoutes(rb)
 
-        testmsg.body should equal ("hi")
+        Await.ready(p.future, Duration.Inf)
+
+        producer.sendBody("embedded:recvtest", "hi")
+
+        val testmsg = receiver.expectMsgType[camel.Message]
+
+        testmsg.getBody should equal ("hi")
 
         val probe = TestProbe()
 
         probe.send(conn, SendMessage(Queue("recvtest"), AMQMessage("hello")))
         probe.expectMsg(SendAck)
 
-        val msg = receiver.expectMsgType[CamelMessage]
+        val msg = receiver.expectMsgType[camel.Message]
 
-        msg.body should equal ("hello")
+        msg.getBody should equal ("hello")
 
         probe.send(conn, SendMessage(Queue("recvtest"),
             AMQMessage("headertest", JMSMessageProperties().copy(`type` = Some("test"), correlationID = Some("x")),
                 Map("testheader" → true, "head2" → 3))))
         probe.expectMsg(SendAck)
 
-        val headertest = receiver.expectMsgType[CamelMessage]
+        val headertest = receiver.expectMsgType[camel.Message]
 
-        headertest.body should equal ("headertest")
-        headertest.headerAs[String]("JMSType").get should equal ("test")
-        headertest.headerAs[String]("JMSCorrelationID").get should equal ("x")
-        headertest.headerAs[Boolean]("testheader").get should equal (true)
-        headertest.headerAs[Int]("head2").get should equal (3)
+        headertest.getBody should equal ("headertest")
+        headertest.getHeader("JMSType") should equal ("test")
+        headertest.getHeader("JMSCorrelationID") should equal ("x")
+        headertest.getHeader("testheader") should equal (true)
+        headertest.getHeader("head2") should equal (3)
 
-        probe watch cons
-        cons ! PoisonPill
-
-        probe.expectMsgType[Terminated]
+        camelContext.removeRouteDefinitions(camelContext.getRouteDefinitions.asScala.toList.asJava)
+        camelContext.setLifecycleStrategies(camelContext.getLifecycleStrategies.asScala.filterNot(_ == lss).asJava)
 
         closeConnection(conn)
     }
@@ -292,7 +326,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         Thread.sleep(250)
 
-        CamelExtension(system).template.sendBody("embedded:topic:sharedtopic", "topic test")
+        producer.sendBody("embedded:topic:sharedtopic", "topic test")
 
         probe1.expectMsgType[AMQMessage].body should equal ("topic test")
         probe2.expectMsgType[AMQMessage].body should equal ("topic test")
@@ -315,7 +349,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         probe1.expectMsg(ConsumeSuccess(Topic("sharedtopic2")))
         probe2.expectMsg(ConsumeSuccess(Topic("sharedtopic2")))
 
-        CamelExtension(system).template.sendBody("embedded:topic:sharedtopic2", "topic test")
+        producer.sendBody("embedded:topic:sharedtopic2", "topic test")
 
         probe1.expectMsgType[AMQMessage].body should equal ("topic test")
         probe2.expectMsgType[AMQMessage].body should equal ("topic test")
@@ -338,8 +372,8 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         probe1.expectMsg(ConsumeSuccess(Queue("q1")))
         probe2.expectMsg(ConsumeSuccess(Queue("q2")))
 
-        CamelExtension(system).template.sendBody("embedded:q1", "queue test")
-        CamelExtension(system).template.sendBody("embedded:q2", "queue test")
+        producer.sendBody("embedded:q1", "queue test")
+        producer.sendBody("embedded:q2", "queue test")
 
         probe1.expectMsgType[AMQMessage].body should equal ("queue test")
         probe2.expectMsgType[AMQMessage].body should equal ("queue test")
@@ -353,15 +387,35 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     it should "support request/reply" in {
         val conn = getConnection
 
-        val cons = TestActorRef(new Consumer {
-            override def endpointUri: String = "embedded:testrr"
-
-            override def receive: Actor.Receive = {
-                case CamelMessage(msg: String, _) ⇒ sender() ! msg.reverse
-                case CamelMessage(msg: jl.Integer, _) ⇒ sender() ! Int.box(0 - msg.intValue())
-                case msg: CamelMessage ⇒ sender() ! CamelMessage(msg.headerAs[AnyRef]("replyWith").get, Map("original" → msg.body))
+        val rb = new camel.builder.RouteBuilder() {
+            override def configure(): Unit = {
+                from("embedded:testrr")
+                    .process(new camel.Processor {
+                        override def process(exchange: camel.Exchange): Unit = {
+                            exchange.getIn.getBody match {
+                                case msg: String ⇒ exchange.getIn.setBody(msg.reverse)
+                                case msg: jl.Integer ⇒ exchange.getIn.setBody(Int.box(0 - msg.intValue()))
+                                case _ ⇒
+                                    val in = exchange.getIn
+                                    val origBody = in.getBody
+                                    in.setBody(in.getHeader("replyWith"))
+                                    in.setHeader("original", origBody)
+                            }
+                        }
+                    })
             }
-        })
+        }
+
+        val p = Promise[Unit]()
+        val lss = new camel.support.LifecycleStrategySupport {
+            override def onRoutesAdd(routes: ju.Collection[camel.Route]): Unit = {
+                p.trySuccess({})
+            }
+        }
+        camelContext.addLifecycleStrategy(lss)
+        camelContext.addRoutes(rb)
+
+        Await.ready(p.future, Duration.Inf)
 
         val probe = TestProbe()
 
@@ -380,10 +434,8 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
         msg.headers should contain key "original"
         msg.headers("original") should equal (true)
 
-        probe watch cons
-        cons ! PoisonPill
-
-        probe.expectMsgType[Terminated]
+        camelContext.removeRouteDefinitions(camelContext.getRouteDefinitions.asScala.toList.asJava)
+        camelContext.setLifecycleStrategies(camelContext.getLifecycleStrategies.asScala.filterNot(_ == lss).asJava)
 
         closeConnection(conn)
     }
@@ -608,7 +660,7 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
 
         Thread.sleep(250)
 
-        CamelExtension(system).template.sendBody("embedded:topic:testTopicCons", "topic test")
+        producer.sendBody("embedded:topic:testTopicCons", "topic test")
 
         probe1.expectMsgType[AMQMessage].body should equal ("topic test")
         probe2.expectMsgType[AMQMessage].body should equal ("topic test")

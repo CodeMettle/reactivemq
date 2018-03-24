@@ -56,9 +56,9 @@ libraryDependencies ++= Seq(
     Deps.activemqBroker,
     Deps.activemqCamel,
     Deps.activemqJaas,
-    Deps.akkaCamel,
     Deps.akkaSlf,
     Deps.akkaTest,
+    Deps.camel,
     Deps.jclOverSlf4j,
     Deps.logback,
     Deps.scalaTest
