@@ -60,14 +60,35 @@ private[reactivemq] object ConnectionFactory {
             owner.closeConnection(this, swallowExceptions)
         }
     }
+
+    private[ConnectionFactory] implicit class RichAMQConnFact(val factory: ActiveMQConnectionFactory) extends AnyVal {
+        def configureTrustedPackages(config: ReActiveMQConfig): Unit = {
+            import java.{lang ⇒ jl}
+
+            import scala.util.Try
+
+            // allow this code to run on older versions of activemq by using reflection
+            val factClass = factory.getClass
+            Try(factClass.getDeclaredMethod("setTrustAllPackages", jl.Boolean.TYPE)).toOption foreach { method ⇒
+              method.invoke(factory, Boolean box config.trustAllPackages)
+            }
+
+            if (config.trustedPackages.nonEmpty) {
+                Try(factClass.getDeclaredMethod("setTrustedPackages", classOf[ju.List[String]])).toOption foreach { method ⇒
+                  method.invoke(factory, ju.Arrays.asList(config.trustedPackages: _*))
+                }
+            }
+        }
+    }
 }
 
 private[reactivemq] class ConnectionFactory(key: ConnectionKey, config: ReActiveMQConfig) {
+    import com.codemettle.reactivemq.activemq.ConnectionFactory.RichAMQConnFact
+
     private val factory = key.userAndPass.fold(new ActiveMQConnectionFactory(key.brokerUrl))(
         uandp ⇒ new ActiveMQConnectionFactory(uandp._1, uandp._2, key.brokerUrl))
-    factory.setTrustAllPackages(config.trustAllPackages)
-    if (config.trustedPackages.nonEmpty)
-      factory.setTrustedPackages(ju.Arrays.asList(config.trustedPackages: _*))
+
+    factory.configureTrustedPackages(config)
 
     private var connections = Set.empty[Connection]
 
