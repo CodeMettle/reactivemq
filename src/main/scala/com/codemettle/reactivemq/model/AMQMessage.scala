@@ -9,8 +9,10 @@ package com.codemettle.reactivemq
 package model
 
 import java.{io ⇒ jio, util ⇒ ju}
+
 import javax.jms
 
+import akka.util.ByteString
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -99,16 +101,16 @@ object AMQMessage {
 
             val buff = new Array[Byte](Math.min(msg.getBodyLength, bufferSize).toInt)
 
-            @tailrec def read(data: Array[Byte]): Array[Byte] = {
+            @tailrec def read(data: ByteString): Array[Byte] = {
                 if (msg.getBodyLength == data.length)
-                    data
+                    data.toArray
                 else {
                     val len = msg.readBytes(buff)
                     val d = buff.take(len)
-                    read(data ++ d)
+                    read(data ++ ByteString(d))
                 }
             }
-            read(Array.emptyByteArray)
+            read(ByteString.empty)
         }
 
         val body = msg match {

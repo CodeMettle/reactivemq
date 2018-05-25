@@ -82,7 +82,7 @@ class RequestReplyActor(replyTo: ActorRef, tempQueueManager: ActorRef, replyQueu
 
         case reply: AMQMessage ⇒
             replyTo tellFromSRA reply
-            context stop self
+            self ! PoisonPill // hopefully comes in after the SendAck
 
         case TimedOut(timeout) ⇒
             replyTo tellFromSRA Status.Failure(RequestTimedOut(timeout))
