@@ -58,10 +58,12 @@ class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorL
     }
 
     def receive = {
-        case req@AutoConnect(AutoConnectConfig(brokerUrl, Some(user), Some(pass)), name, _) ⇒
-            openConnection(ConnectionKey(brokerUrl, Some(user → pass), Some(name)), req)
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, Some(user), Some(pass)), name, deobfuscator, _) ⇒
+            val goodUser = deobfuscator.deobfuscateUsername(user)
+            val goodPass = deobfuscator.deobfuscatePassword(pass)
+            openConnection(ConnectionKey(brokerUrl, Some(goodUser → goodPass), Some(name)), req)
 
-        case req@AutoConnect(AutoConnectConfig(brokerUrl, _, _), name, _) ⇒
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, _, _), name, _, _) ⇒
             openConnection(ConnectionKey(brokerUrl, None, Some(name)), req)
 
         case req@GetConnection(brokerUrl, staticName, _) ⇒

@@ -47,6 +47,7 @@ object AutoConnectConfig {
 case class ReActiveMQConfig(connFactTimeout: FiniteDuration, reestablishConnections: Boolean,
                             connectionReestablishPeriod: FiniteDuration, producerIdleTimeout: FiniteDuration,
                             logConsumers: Boolean, queueConsumerTimeout: FiniteDuration,
+                            autoConnectCredsDeobfuscatorClass: String,
                             autoConnections: Map[String, AutoConnectConfig], autoconnectTimeout: FiniteDuration,
                             trustedPackages: Seq[String], trustAllPackages: Boolean)
 
@@ -59,6 +60,7 @@ object ReActiveMQConfig extends SettingsCompanion[ReActiveMQConfig]("reactivemq"
             c getFiniteDuration "close-unused-producers-after",
             c getBoolean        "log-consumers",
             c getFiniteDuration "default-queue-consumer-reply-timeout",
+            c getString         "autoconnect-creds-doer",
             AutoConnectConfig parse c.getObject("autoconnect"),
             c getFiniteDuration "autoconnect-timeout",
             c.getStringList("trusted-packages").asScala.toList,
