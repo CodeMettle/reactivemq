@@ -7,9 +7,11 @@
  */
 package com.codemettle.reactivemq.model
 
+import java.{util => ju}
+import javax.jms
+
 import org.apache.activemq.command.ActiveMQBytesMessage
 import org.scalatest._
-import javax.jms
 
 import com.codemettle.reactivemq.DestinationCreator
 
@@ -78,6 +80,8 @@ class TestAMQMessage extends FlatSpec with Matchers {
         val msgLen: Long = Int.MaxValue.toLong + 10
         val msg = new ActiveMQBytesMessage() {
             override def getBodyLength: Long = msgLen
+
+            override def getPropertyNames: ju.Enumeration[_] = super.getPropertyNames
         }
         the[RuntimeException] thrownBy
             AMQMessage.from(msg) should have message s"Message too large, unable to read $msgLen bytes of data"
@@ -102,6 +106,8 @@ class TestAMQMessage extends FlatSpec with Matchers {
                 d.zipWithIndex.foreach { case (b, idx) => array.update(idx, b) }
                 d.length
             }
+
+            override def getPropertyNames: ju.Enumeration[_] = super.getPropertyNames
         }
 
         val msg = AMQMessage.from(amqMessage)

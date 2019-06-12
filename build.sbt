@@ -34,7 +34,7 @@ pomExtra := {
 
 // Build
 
-crossScalaVersions := Seq("2.11.12", "2.12.5")
+crossScalaVersions := Seq("2.11.12", "2.12.5", "2.13.0")
 
 scalaVersion := crossScalaVersions.value.last
 
