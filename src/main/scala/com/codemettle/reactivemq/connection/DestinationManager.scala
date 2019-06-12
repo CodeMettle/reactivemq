@@ -27,7 +27,7 @@ private[connection] object DestinationManager {
 }
 
 private[connection] trait DestinationManager extends Actor {
-    this: ActorLogging ⇒
+    this: ActorLogging =>
     import context.dispatcher
 
     protected def connection: Connection
@@ -38,39 +38,39 @@ private[connection] trait DestinationManager extends Actor {
     private def createDestination(dest: Destination) = {
         (Future {
             dest match {
-                case tt: TempTopic ⇒ tt.jmsDest
-                case tq: TempQueue ⇒ tq.jmsDest
-                case Topic(name) ⇒ connection createTopic name
-                case Queue(name) ⇒ connection createQueue name
+                case tt: TempTopic => tt.jmsDest
+                case tq: TempQueue => tq.jmsDest
+                case Topic(name) => connection createTopic name
+                case Queue(name) => connection createQueue name
             }
-        } map (d ⇒ DestinationCreated(dest, d)) recover {
-            case t ⇒ CreateFailure(dest, t)
+        } map (d => DestinationCreated(dest, d)) recover {
+            case t => CreateFailure(dest, t)
         }) pipeTo self
     }
 
     protected def getDestination(dest: Destination): Future[jms.Destination] = {
         destinations get dest match {
-            case Some(d) ⇒ Future successful d
-            case None ⇒
+            case Some(d) => Future successful d
+            case None =>
                 val p = Promise[jms.Destination]()
                 val newList = p :: destRequests.getOrElse(dest, {
                     createDestination(dest)
                     Nil
                 })
-                destRequests += (dest → newList)
+                destRequests += (dest -> newList)
                 p.future
         }
     }
 
     protected def handleDestinationMessages: Receive = {
-        case DestinationCreated(req, dest) ⇒
-            destinations += (req → dest)
+        case DestinationCreated(req, dest) =>
+            destinations += (req -> dest)
 
-            destRequests get req foreach (reqs ⇒ reqs foreach (_ success dest))
+            destRequests get req foreach (reqs => reqs foreach (_ success dest))
             destRequests -= req
 
-        case CreateFailure(req, t) ⇒
-            destRequests get req foreach (reqs ⇒ reqs foreach (_ failure t))
+        case CreateFailure(req, t) =>
+            destRequests get req foreach (reqs => reqs foreach (_ failure t))
             destRequests -= req
     }
 }

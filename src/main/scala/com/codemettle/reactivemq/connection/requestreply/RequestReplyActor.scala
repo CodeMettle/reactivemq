@@ -51,18 +51,18 @@ class RequestReplyActor(replyTo: ActorRef, tempQueueManager: ActorRef, replyQueu
     }
 
     def receive = {
-        case SendAck ⇒ // cool
+        case SendAck => // cool
 
-        case ReceiveTimeout ⇒ context stop self
+        case ReceiveTimeout => context stop self
 
-        case error: Status.Failure ⇒
+        case error: Status.Failure =>
             replyTo tellFromSRA error
             context stop self
 
-        case RequestMessage(dest, msg, timeout) ⇒
+        case RequestMessage(dest, msg, timeout) =>
             val withReplyTo = msg.properties.copy(replyTo = Some(replyQueue))
             val withCorrelation = withReplyTo.correlationID
-                .fold(withReplyTo.copy(correlationID = Some(UUID.randomUUID().toString)))(_ ⇒ withReplyTo)
+                .fold(withReplyTo.copy(correlationID = Some(UUID.randomUUID().toString)))(_ => withReplyTo)
 
             val toSend = msg.copy(properties = withCorrelation)
 
@@ -75,16 +75,16 @@ class RequestReplyActor(replyTo: ActorRef, tempQueueManager: ActorRef, replyQueu
             implicit val to = Timeout(timeout)
 
             (connection ? SendMessage(dest, toSend, timeout.toMillis, timeout)).transform(identity, {
-                case _: AskTimeoutException ⇒ RequestTimedOut(timeout)
+                case _: AskTimeoutException => RequestTimedOut(timeout)
 
-                case t ⇒ t
+                case t => t
             }) pipeTo self
 
-        case reply: AMQMessage ⇒
+        case reply: AMQMessage =>
             replyTo tellFromSRA reply
             self ! PoisonPill // hopefully comes in after the SendAck
 
-        case TimedOut(timeout) ⇒
+        case TimedOut(timeout) =>
             replyTo tellFromSRA Status.Failure(RequestTimedOut(timeout))
             context stop self
     }

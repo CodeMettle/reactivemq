@@ -19,8 +19,8 @@ package object reactivemq {
     implicit class RichConfig(val u: Config) extends AnyVal {
         def getFiniteDuration(path: String): FiniteDuration =
             u.getDuration(path).toNanos.nanos.toCoarsest match {
-                case fd: FiniteDuration ⇒ fd
-                case _ ⇒ sys.error("can't happen")
+                case fd: FiniteDuration => fd
+                case _ => sys.error("can't happen")
             }
     }
 }

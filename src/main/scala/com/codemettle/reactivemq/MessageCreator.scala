@@ -1,6 +1,6 @@
 package com.codemettle.reactivemq
 
-import java.{io ⇒ jio}
+import java.{io => jio}
 import javax.jms
 
 /**
@@ -11,7 +11,7 @@ trait MessageCreator {
 
   def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage
 
-  def createBytesMessage(data: ⇒ Array[Byte]): jms.BytesMessage
+  def createBytesMessage(data: => Array[Byte]): jms.BytesMessage
 }
 
 trait DestinationCreator {

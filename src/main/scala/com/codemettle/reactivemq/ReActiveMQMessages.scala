@@ -92,10 +92,10 @@ object ReActiveMQMessages {
         override def canEqual(that: Any): Boolean = that.isInstanceOf[ConsumerMessage]
 
         override def equals(obj: scala.Any): Boolean = obj match {
-            case that: ConsumerMessage ⇒ (that canEqual this) && this.destination == that.destination &&
+            case that: ConsumerMessage => (that canEqual this) && this.destination == that.destination &&
                 this.sharedConsumer == that.sharedConsumer
 
-            case _ ⇒ false
+            case _ => false
         }
     }
 

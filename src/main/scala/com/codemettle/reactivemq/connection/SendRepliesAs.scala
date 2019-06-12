@@ -16,12 +16,12 @@ import scala.concurrent.Future
  *
  */
 private[connection] trait SendRepliesAs {
-    this: Actor ⇒
+    this: Actor =>
     import context.dispatcher
 
     protected def sendRepliesAs: ActorRef
 
-    protected def routeFutureFromSRA[T](to: ActorRef)(f: ⇒ Future[T]) = {
+    protected def routeFutureFromSRA[T](to: ActorRef)(f: => Future[T]) = {
         f.pipeTo(to)(sendRepliesAs)
     }
 

@@ -29,13 +29,13 @@ private[connection] object ProducerManager {
 }
 
 private[connection] trait ProducerManager extends Actor {
-    this: DestinationManager with ActorLogging ⇒
+    this: DestinationManager with ActorLogging =>
     import context.dispatcher
 
     abstract override def postStop() = {
         super.postStop()
 
-        producers.values foreach (prod ⇒ ignoring(classOf[Exception])(prod.close()))
+        producers.values foreach (prod => ignoring(classOf[Exception])(prod.close()))
     }
 
     private val config = ReActiveMQConfig(context.system)
@@ -47,57 +47,57 @@ private[connection] trait ProducerManager extends Actor {
     private def touch(dest: Destination) = {
         timers get dest foreach (_.cancel())
         val newTimer = context.system.scheduler.scheduleOnce(config.producerIdleTimeout, self, CleanProducer(dest))
-        timers += (dest → newTimer)
+        timers += (dest -> newTimer)
     }
 
     private def createProducer(dest: Destination) = {
-        getDestination(dest) map (jmsDest ⇒ {
+        getDestination(dest) map (jmsDest => {
             connection createProducer jmsDest
-        }) map (p ⇒ ProducerCreated(dest, p)) recover {
-            case t ⇒ CreateFailed(dest, t)
+        }) map (p => ProducerCreated(dest, p)) recover {
+            case t => CreateFailed(dest, t)
         } pipeTo self
     }
 
     protected def getProducer(dest: Destination): Future[MessageProducer] = {
         producers get dest match {
-            case Some(prod) ⇒
+            case Some(prod) =>
                 touch(dest)
                 Future successful prod
 
-            case None ⇒
+            case None =>
                 val p = Promise[MessageProducer]()
                 val newList = p :: prodReqs.getOrElse(dest, {
                     createProducer(dest)
                     Nil
                 })
 
-                prodReqs += (dest → newList)
+                prodReqs += (dest -> newList)
                 p.future
         }
     }
 
     protected def handleProducerMessages: Receive = {
-        case ProducerCreated(req, prod) ⇒
+        case ProducerCreated(req, prod) =>
             log.debug("Producer created for {}", req)
 
-            producers += (req → prod)
+            producers += (req -> prod)
 
-            prodReqs get req foreach (reqs ⇒ reqs foreach (_ success prod))
+            prodReqs get req foreach (reqs => reqs foreach (_ success prod))
             prodReqs -= req
 
             touch(req)
 
-        case CreateFailed(req, t) ⇒
-            prodReqs get req foreach (reqs ⇒ reqs foreach (_ failure t))
+        case CreateFailed(req, t) =>
+            prodReqs get req foreach (reqs => reqs foreach (_ failure t))
             prodReqs -= req
 
-        case CleanProducer(dest) ⇒
+        case CleanProducer(dest) =>
             log.debug("Closing producer for {}", dest)
 
             timers get dest foreach (_.cancel())
             timers -= dest
 
-            producers get dest foreach (prod ⇒ ignoring(classOf[Exception])(prod.close()))
+            producers get dest foreach (prod => ignoring(classOf[Exception])(prod.close()))
             producers -= dest
     }
 }

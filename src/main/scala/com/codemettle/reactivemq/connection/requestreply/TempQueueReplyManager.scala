@@ -37,26 +37,26 @@ class TempQueueReplyManager(tempQueue: TempQueue, connection: ActorRef) extends 
     }
 
     def receive = {
-        case msg: AMQMessage ⇒ msg.properties.correlationID match {
-            case None ⇒
+        case msg: AMQMessage => msg.properties.correlationID match {
+            case None =>
                 log.warning("Received message with no JMSCorrelationID: {}", msg)
 
-            case Some(id) if outstanding contains id ⇒
+            case Some(id) if outstanding contains id =>
                 log.debug("Got message with JMSCorrelationID {}", id)
 
                 val sendTo = outstanding(id)
                 outstanding -= id
                 sendTo ! msg
 
-            case Some(id) ⇒
+            case Some(id) =>
                 log.warning("Dropping message with unknown JMSCorrelationID: {}", msg)
         }
 
-        case RegisterListener(corrId, timeout) ⇒
-            outstanding += (corrId → sender())
+        case RegisterListener(corrId, timeout) =>
+            outstanding += (corrId -> sender())
             context watch sender()
 
-        case Terminated(act) ⇒
-            outstanding find (_._2 == act) foreach (e ⇒ outstanding -= e._1)
+        case Terminated(act) =>
+            outstanding find (_._2 == act) foreach (e => outstanding -= e._1)
     }
 }

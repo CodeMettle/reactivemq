@@ -10,9 +10,9 @@ import scala.language.implicitConversions
   */
 package object util {
   implicit def actorSystem(implicit arf: ActorRefFactory): ActorSystem = arf match {
-    case as: ActorSystem ⇒ as
-    case ac: ActorContext ⇒ ac.system
-    case _ ⇒ sys.error(s"Unsupported ActorRefFactory $arf")
+    case as: ActorSystem => as
+    case ac: ActorContext => ac.system
+    case _ => sys.error(s"Unsupported ActorRefFactory $arf")
   }
 
   implicit class RichFuture[T](val u: Future[T]) extends AnyVal {

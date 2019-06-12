@@ -15,7 +15,7 @@ abstract class SettingsCompanion[T](path: String) {
   private def materialize(system: ActorSystem): T =
     cache.getOrElse(system, {
       val t = fromSubConfig(system.settings.config.getConfig(path))
-      cache += (system → t)
+      cache += (system -> t)
       t
     })
 

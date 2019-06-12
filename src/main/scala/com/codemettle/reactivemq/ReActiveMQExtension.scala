@@ -32,7 +32,7 @@ object ReActiveMQExtensionImpl {
         def getConnectionFactory(forKey: ConnectionKey): ConnectionFactory = synchronized {
             connFacts.getOrElse(forKey, {
                 val ret = ConnectionFactory(forKey, config)
-                connFacts += (forKey → ret)
+                connFacts += (forKey -> ret)
                 ret
             })
         }
@@ -54,9 +54,9 @@ class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: Extende
 
     private val credsDeobfuscator = {
         val fqcn = config.autoConnectCredsDeobfuscatorClass
-        val params = Seq(classOf[ExtendedActorSystem] → system)
+        val params = Seq(classOf[ExtendedActorSystem] -> system)
         (system.dynamicAccess.createInstanceFor[CredentialsDeobfuscator](fqcn, params) recover {
-            case e ⇒ throw new ConfigurationException(s"Could not find/load CredentialsDeobfuscator implementation [$fqcn]", e)
+            case e => throw new ConfigurationException(s"Could not find/load CredentialsDeobfuscator implementation [$fqcn]", e)
         }).get
     }
 
@@ -70,15 +70,15 @@ class ReActiveMQExtensionImpl(config: ReActiveMQConfig)(implicit system: Extende
         import com.codemettle.reactivemq.util._
         implicit val timeout: Timeout = Timeout(config.autoconnectTimeout + 2.seconds)
 
-        val futures = config.autoConnections map (e ⇒
+        val futures = config.autoConnections map (e =>
             (manager ? AutoConnect(e._2, e._1, credsDeobfuscator, config.autoconnectTimeout)).mapTo[ConnectionEstablished])
 
-        val mapF = Future sequence futures map (conns ⇒ (conns map (ce ⇒ ce.request.staticActorName.get → ce.connectionActor)).toMap)
+        val mapF = Future sequence futures map (conns => (conns map (ce => ce.request.staticActorName.get -> ce.connectionActor)).toMap)
 
         mapF.await(config.autoconnectTimeout + 5.seconds)
     } match {
-        case Success(ac) ⇒ ac
-        case Failure(t) ⇒
+        case Success(ac) => ac
+        case Failure(t) =>
             system stop manager
             throw t
     }

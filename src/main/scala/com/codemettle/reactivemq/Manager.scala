@@ -30,7 +30,7 @@ object Manager {
 class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorLogging {
     private var connectionFactories = Map.empty[ConnectionKey, ActorRef]
 
-    private val connFactName = Iterator from 0 map (i ⇒ s"Connection${base64(i)}")
+    private val connFactName = Iterator from 0 map (i => s"Connection${base64(i)}")
 
     private def getConnectionFact(key: ConnectionKey, staticName: Option[String]): Try[ActorRef] = Try {
         connectionFactories.getOrElse(key, {
@@ -44,7 +44,7 @@ class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorL
 
             context watch act
 
-            connectionFactories += (key → act)
+            connectionFactories += (key -> act)
 
             act
         })
@@ -52,27 +52,27 @@ class Manager(connFactHolder: ConnectionFactoryHolder) extends Actor with ActorL
 
     private def openConnection(key: ConnectionKey, req: ConnectionRequest) = {
         getConnectionFact(key, req.staticActorName) match {
-            case Success(connFact) ⇒ connFact forward req
-            case Failure(t) ⇒ sender() ! Status.Failure(t)
+            case Success(connFact) => connFact forward req
+            case Failure(t) => sender() ! Status.Failure(t)
         }
     }
 
     def receive = {
-        case req@AutoConnect(AutoConnectConfig(brokerUrl, Some(user), Some(pass)), name, deobfuscator, _) ⇒
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, Some(user), Some(pass)), name, deobfuscator, _) =>
             val goodUser = deobfuscator.deobfuscateUsername(user)
             val goodPass = deobfuscator.deobfuscatePassword(pass)
-            openConnection(ConnectionKey(brokerUrl, Some(goodUser → goodPass), Some(name)), req)
+            openConnection(ConnectionKey(brokerUrl, Some(goodUser -> goodPass), Some(name)), req)
 
-        case req@AutoConnect(AutoConnectConfig(brokerUrl, _, _), name, _, _) ⇒
+        case req@AutoConnect(AutoConnectConfig(brokerUrl, _, _), name, _, _) =>
             openConnection(ConnectionKey(brokerUrl, None, Some(name)), req)
 
-        case req@GetConnection(brokerUrl, staticName, _) ⇒
+        case req@GetConnection(brokerUrl, staticName, _) =>
             openConnection(ConnectionKey(brokerUrl, None, staticName), req)
 
-        case req@GetAuthenticatedConnection(brokerUrl, user, pass, staticName, _) ⇒
-            openConnection(ConnectionKey(brokerUrl, Some(user → pass), staticName), req)
+        case req@GetAuthenticatedConnection(brokerUrl, user, pass, staticName, _) =>
+            openConnection(ConnectionKey(brokerUrl, Some(user -> pass), staticName), req)
 
-        case Terminated(act) ⇒ connectionFactories find (_._2 == act) foreach (kv ⇒ {
+        case Terminated(act) => connectionFactories find (_._2 == act) foreach (kv => {
             connFactHolder closeConnectionFactory kv._1
             connectionFactories -= kv._1
         })

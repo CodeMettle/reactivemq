@@ -8,13 +8,13 @@
 package com.codemettle.reactivemq
 package config
 
-import java.{util ⇒ ju}
+import java.{util => ju}
 
 import com.typesafe.config.{Config, ConfigObject, ConfigValue, ConfigValueType}
 
+import com.codemettle.reactivemq.CollectionConverters._
 import com.codemettle.reactivemq.util.SettingsCompanion
 
-import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -27,21 +27,21 @@ object AutoConnectConfig {
     private val ws = """^\s*$""".r
 
     def parseValue(cv: ConfigValue): AutoConnectConfig = cv.valueType() match {
-        case ConfigValueType.STRING ⇒ AutoConnectConfig(cv.unwrapped().asInstanceOf[String])
-        case ConfigValueType.OBJECT ⇒
+        case ConfigValueType.STRING => AutoConnectConfig(cv.unwrapped().asInstanceOf[String])
+        case ConfigValueType.OBJECT =>
             val map = cv.unwrapped().asInstanceOf[ju.Map[String, String]].asScala
             def fval(f: String) = map get f flatMap {
-                case null ⇒ None
-                case ws() ⇒ None
-                case v ⇒ Some(v)
+                case null => None
+                case ws() => None
+                case v => Some(v)
             }
             AutoConnectConfig(map("address"), fval("username"), fval("password"))
 
-        case _ ⇒ sys.error(s"$cv is not an OBJECT or STRING")
+        case _ => sys.error(s"$cv is not an OBJECT or STRING")
     }
 
     def parse(c: ConfigObject): Map[String, AutoConnectConfig] =
-        c.entrySet().asScala.map(e ⇒ e.getKey → parseValue(e.getValue)).toMap
+        c.entrySet().asScala.map(e => e.getKey -> parseValue(e.getValue)).toMap
 }
 
 case class ReActiveMQConfig(connFactTimeout: FiniteDuration, reestablishConnections: Boolean,

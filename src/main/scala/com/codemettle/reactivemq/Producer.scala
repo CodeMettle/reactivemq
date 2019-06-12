@@ -26,7 +26,7 @@ object Producer {
 
     private case object TimedOut
 
-    private class ResponseTransformer(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) ⇒ Any) extends Actor {
+    private class ResponseTransformer(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) => Any) extends Actor {
         import context.dispatcher
 
         private val timer = context.system.scheduler.scheduleOnce(timeout + 1.second, self, TimedOut)
@@ -38,17 +38,17 @@ object Producer {
         }
 
         def receive = {
-            case TimedOut ⇒ context stop self
+            case TimedOut => context stop self
 
-            case msg ⇒ Try(xform(msg)) match {
-                case Success(m) ⇒ origSender forward m
-                case Failure(t) ⇒ origSender forward Status.Failure(t)
+            case msg => Try(xform(msg)) match {
+                case Success(m) => origSender forward m
+                case Failure(t) => origSender forward Status.Failure(t)
             }
         }
     }
 
     private object ResponseTransformer {
-        def props(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) ⇒ Any) = {
+        def props(timeout: FiniteDuration, origSender: ActorRef, xform: (Any) => Any) = {
             Props(new ResponseTransformer(timeout, origSender, xform))
         }
     }
@@ -60,7 +60,7 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
     def connection: ActorRef
     def destination: Destination
 
-    private val actorNamer = Iterator from 0 map (i ⇒ s"responder${Helpers.base64(i)}")
+    private val actorNamer = Iterator from 0 map (i => s"responder${Helpers.base64(i)}")
 
     protected def transformOutgoingMessage(msg: Any) = msg
 
@@ -82,13 +82,13 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
     protected def sendTimeout: FiniteDuration = 10.seconds
 
     final def receive = {
-        case LogError(t, msg) ⇒
+        case LogError(t, msg) =>
             log.error(t, "Error sending {}", msg)
 
-        case msg ⇒
+        case msg =>
             val newMsg = transformOutgoingMessage(msg) match {
-                case amq: AMQMessage ⇒ amq
-                case other ⇒ AMQMessage(other)
+                case amq: AMQMessage => amq
+                case other => AMQMessage(other)
             }
 
             if (oneway) {
@@ -96,7 +96,7 @@ trait Producer extends Actor with TwoWayCapable with ActorLogging {
 
                 if (swallowSendStatus) {
                     implicit val timeout = Timeout(sendTimeout + 5.seconds)
-                    (connection ? sendMessage).failed.foreach(t ⇒ self ! LogError(t, newMsg))
+                    (connection ? sendMessage).failed.foreach(t => self ! LogError(t, newMsg))
                 } else {
                     connection forward sendMessage
                 }

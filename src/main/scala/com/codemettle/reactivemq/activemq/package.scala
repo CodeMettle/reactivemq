@@ -1,6 +1,6 @@
 package com.codemettle.reactivemq
 
-import java.{io ⇒ jio}
+import java.{io => jio}
 import javax.jms
 
 import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQObjectMessage, ActiveMQTextMessage}
@@ -24,7 +24,7 @@ package object activemq {
       msg
     }
 
-    override def createBytesMessage(data: ⇒ Array[Byte]): jms.BytesMessage = {
+    override def createBytesMessage(data: => Array[Byte]): jms.BytesMessage = {
       val msg = new ActiveMQBytesMessage
       msg writeBytes data
       msg

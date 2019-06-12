@@ -59,9 +59,9 @@ object TempTopic {
 
 object Destination {
     def apply(jmsDest: jms.Destination) = jmsDest match {
-        case tq: jms.TemporaryQueue ⇒ TempQueue(tq)
-        case tt: jms.TemporaryTopic ⇒ TempTopic(tt)
-        case q: jms.Queue ⇒ Queue(q.getQueueName)
-        case t: jms.Topic ⇒ Topic(t.getTopicName)
+        case tq: jms.TemporaryQueue => TempQueue(tq)
+        case tt: jms.TemporaryTopic => TempTopic(tt)
+        case q: jms.Queue => Queue(q.getQueueName)
+        case t: jms.Topic => Topic(t.getTopicName)
     }
 }

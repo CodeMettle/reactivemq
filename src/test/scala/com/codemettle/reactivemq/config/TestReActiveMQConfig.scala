@@ -21,7 +21,7 @@ import scala.util.control.Exception.ultimately
  *
  */
 class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
-    private def confTestCfg(cfg: String)(f: (ReActiveMQConfig) ⇒ Unit) = {
+    private def confTestCfg(cfg: String)(f: (ReActiveMQConfig) => Unit) = {
         val system = ActorSystem("Test", ConfigFactory parseString cfg withFallback ConfigFactory.load())
 
         def shutdown() = system.terminate().await
@@ -30,10 +30,10 @@ class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
             f(ReActiveMQConfig(system))
         }
     }
-    private def confTest(f: (ReActiveMQConfig) ⇒ Unit) = confTestCfg("")(f)
+    private def confTest(f: (ReActiveMQConfig) => Unit) = confTestCfg("")(f)
 
     "a ReActiveMQConfig" should "be instantiable from reference.conf" in {
-        confTest { config ⇒
+        confTest { config =>
             config.connFactTimeout should equal (1.minute)
         }
     }
@@ -48,17 +48,17 @@ class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
               |}
             """.stripMargin
 
-        confTestCfg(oldConfig) { config ⇒
+        confTestCfg(oldConfig) { config =>
             config.autoConnections should contain key "server1"
             config.autoConnections should contain key "server2"
 
             config.autoConnections("server1").address should be ("address.to.s1")
             config.autoConnections("server2").address should be ("address.to.s2")
 
-            config.autoConnections("server1").username should be ('empty)
-            config.autoConnections("server2").username should be ('empty)
-            config.autoConnections("server1").password should be ('empty)
-            config.autoConnections("server2").password should be ('empty)
+            config.autoConnections("server1").username shouldBe empty
+            config.autoConnections("server2").username shouldBe empty
+            config.autoConnections("server1").password shouldBe empty
+            config.autoConnections("server2").password shouldBe empty
         }
     }
 
@@ -76,16 +76,16 @@ class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
               |}
             """.stripMargin
 
-        confTestCfg(newConfig) { config ⇒
+        confTestCfg(newConfig) { config =>
             config.autoConnections should contain key "server1"
             config.autoConnections should contain key "server2"
 
             config.autoConnections("server1").address should be ("address.to.s1")
             config.autoConnections("server2").address should be ("address.to.s2")
 
-            config.autoConnections("server1").username should be ('empty)
+            config.autoConnections("server1").username shouldBe empty
             config.autoConnections("server2").username.value should be ("user")
-            config.autoConnections("server1").password should be ('empty)
+            config.autoConnections("server1").password shouldBe empty
             config.autoConnections("server2").password.value should be ("pass")
         }
     }
@@ -108,17 +108,17 @@ class TestReActiveMQConfig extends FlatSpec with Matchers with OptionValues {
               |}
             """.stripMargin
 
-        confTestCfg(newConfig) { config ⇒
+        confTestCfg(newConfig) { config =>
             config.autoConnections should contain key "server1"
             config.autoConnections should contain key "server2"
 
             config.autoConnections("server1").address should be ("address.to.s1")
             config.autoConnections("server2").address should be ("address.to.s2")
 
-            config.autoConnections("server1").username should be ('empty)
-            config.autoConnections("server2").username should be ('empty)
-            config.autoConnections("server1").password should be ('empty)
-            config.autoConnections("server2").password should be ('empty)
+            config.autoConnections("server1").username shouldBe empty
+            config.autoConnections("server2").username shouldBe empty
+            config.autoConnections("server1").password shouldBe empty
+            config.autoConnections("server2").password shouldBe empty
         }
     }
 }

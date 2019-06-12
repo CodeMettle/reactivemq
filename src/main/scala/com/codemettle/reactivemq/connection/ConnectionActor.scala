@@ -33,7 +33,7 @@ class ConnectionActor(protected val sendRepliesAs: ActorRef)(implicit protected 
 
     private var tempQueueReplyMan = Option.empty[(ActorRef, TempQueue)]
 
-    private val rraNamer = Iterator from 0 map (i ⇒ s"requestreply${Helpers.base64(i)}")
+    private val rraNamer = Iterator from 0 map (i => s"requestreply${Helpers.base64(i)}")
 
     override def postStop() = {
         super.postStop()
@@ -45,34 +45,34 @@ class ConnectionActor(protected val sendRepliesAs: ActorRef)(implicit protected 
         tempQueueReplyMan.fold(Try {
             val tempQueue = TempQueue create connection
             val act = context.actorOf(TempQueueReplyManager.props(tempQueue, self), "tempQueueReplyManager")
-            tempQueueReplyMan = Some(act → tempQueue)
-            act → tempQueue
+            tempQueueReplyMan = Some(act -> tempQueue)
+            act -> tempQueue
         })(Success(_))
     }
 
     def receive = handleDestinationMessages orElse handleProducerMessages orElse handleConsumerMessages orElse {
-        case SendMessage(dest, msg, ttl, _) ⇒ routeFutureFromSRA(sender()) {
+        case SendMessage(dest, msg, ttl, _) => routeFutureFromSRA(sender()) {
             val props = msg.properties
-            getProducer(dest) map (prod ⇒ {
+            getProducer(dest) map (prod => {
                 prod.send(msg.jmsMessage, props.deliveryMode, props.priority, ttl)
                 SendAck
             })
         }
 
-        case rm: RequestMessage ⇒ getTQRM match {
-            case Failure(t) ⇒ sender() tellFromSRA Status.Failure(t)
+        case rm: RequestMessage => getTQRM match {
+            case Failure(t) => sender() tellFromSRA Status.Failure(t)
 
-            case Success((tqrm, tempQueue)) ⇒
+            case Success((tqrm, tempQueue)) =>
                 val rra = context.actorOf(RequestReplyActor.props(sender(), tqrm, tempQueue, self, sendRepliesAs),
                     rraNamer.next())
 
                 rra forward rm
         }
 
-        case ConnectionException(e) ⇒
+        case ConnectionException(e) =>
             log.error(e, "Exception; closing connection")
             context stop self
 
-        case CloseConnection ⇒ self ! PoisonPill
+        case CloseConnection => self ! PoisonPill
     }
 }

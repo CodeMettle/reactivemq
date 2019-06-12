@@ -40,11 +40,11 @@ object QueueConsumer {
 
         private def sendResponseToOriginator(reply: AMQMessage) = {
             replyToOrOrigMsg match {
-                case Left(msg) ⇒
+                case Left(msg) =>
                     log.warning("No JMSReplyTo on {}, can't reply with {}", msg, reply)
                     context stop self
 
-                case Right(replyTo) ⇒
+                case Right(replyTo) =>
                     // http://docs.oracle.com/cd/E13171_01/alsb/docs25/interopjms/MsgIDPatternforJMS.html
                     //  fallback to msgId
                     val responseCorrId = correlationId orElse messageId
@@ -73,19 +73,19 @@ object QueueConsumer {
         }
 
         def receive = {
-            case MessageForResponse(msg, defaultTimeout) ⇒ configureResponder(msg, defaultTimeout)
-            case Expired ⇒ context stop self
-            case message: AMQMessage ⇒ sendResponseToOriginator(message)
-            case message ⇒ sendResponseToOriginator(AMQMessage(message))
+            case MessageForResponse(msg, defaultTimeout) => configureResponder(msg, defaultTimeout)
+            case Expired => context stop self
+            case message: AMQMessage => sendResponseToOriginator(message)
+            case message => sendResponseToOriginator(AMQMessage(message))
         }
 
         def sentMessage(reply: AMQMessage): Receive = {
-            case Expired ⇒ context stop self
-            case SendAck ⇒
+            case Expired => context stop self
+            case SendAck =>
                 log.debug("Response sent")
                 context stop self
 
-            case Status.Failure(t) ⇒
+            case Status.Failure(t) =>
                 log.error(t, "Error sending {}", reply)
                 context stop self
         }
@@ -129,13 +129,13 @@ object QueueConsumer {
         }
 
         def receive = {
-            case cf: ConsumeFailed ⇒
+            case cf: ConsumeFailed =>
                 subscribe()
                 if (sendStatusNotifs) context.parent forward cf
 
-            case notif: DedicatedConsumerNotif ⇒ if (sendStatusNotifs) context.parent forward notif
+            case notif: DedicatedConsumerNotif => if (sendStatusNotifs) context.parent forward notif
 
-            case msg: AMQMessage ⇒ context.parent.tell(msg, getReplyActor(msg))
+            case msg: AMQMessage => context.parent.tell(msg, getReplyActor(msg))
         }
     }
 
@@ -180,7 +180,7 @@ object TopicConsumer {
         }
 
         def receive = {
-            case msg: AMQMessage ⇒ context.parent forward msg
+            case msg: AMQMessage => context.parent forward msg
         }
     }
 

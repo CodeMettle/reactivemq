@@ -7,7 +7,7 @@
  */
 package com.codemettle.reactivemq.activemq
 
-import java.{io ⇒ jio, util ⇒ ju}
+import java.{io => jio, util => ju}
 
 import javax.jms
 import javax.jms.{BytesMessage, ObjectMessage, TextMessage}
@@ -32,7 +32,7 @@ private[reactivemq] object ConnectionFactory {
 
     case class Connection(jmsConn: jms.Connection, jmsSess: jms.Session, owner: ConnectionFactory)
                          (implicit val mc: MessageCreator) extends DestinationCreator with MessageCreator {
-        def setExceptionListener(listener: (jms.JMSException) ⇒ Unit): Unit = {
+        def setExceptionListener(listener: (jms.JMSException) => Unit): Unit = {
             jmsConn.setExceptionListener(new jms.ExceptionListener {
                 override def onException(exception: jms.JMSException): Unit = listener(exception)
             })
@@ -42,7 +42,7 @@ private[reactivemq] object ConnectionFactory {
 
         override def createObjectMessage(obj: jio.Serializable): ObjectMessage = mc.createObjectMessage(obj)
 
-        override def createBytesMessage(data: ⇒ Array[Byte]): BytesMessage = mc.createBytesMessage(data)
+        override def createBytesMessage(data: => Array[Byte]): BytesMessage = mc.createBytesMessage(data)
 
         def createConsumer(dest: jms.Destination): jms.MessageConsumer = jmsSess createConsumer dest
 
@@ -63,18 +63,18 @@ private[reactivemq] object ConnectionFactory {
 
     private[ConnectionFactory] implicit class RichAMQConnFact(val factory: ActiveMQConnectionFactory) extends AnyVal {
         def configureTrustedPackages(config: ReActiveMQConfig): Unit = {
-            import java.{lang ⇒ jl}
+            import java.{lang => jl}
 
             import scala.util.Try
 
             // allow this code to run on older versions of activemq by using reflection
             val factClass = factory.getClass
-            Try(factClass.getDeclaredMethod("setTrustAllPackages", jl.Boolean.TYPE)).toOption foreach { method ⇒
+            Try(factClass.getDeclaredMethod("setTrustAllPackages", jl.Boolean.TYPE)).toOption foreach { method =>
               method.invoke(factory, Boolean box config.trustAllPackages)
             }
 
             if (config.trustedPackages.nonEmpty) {
-                Try(factClass.getDeclaredMethod("setTrustedPackages", classOf[ju.List[String]])).toOption foreach { method ⇒
+                Try(factClass.getDeclaredMethod("setTrustedPackages", classOf[ju.List[String]])).toOption foreach { method =>
                   method.invoke(factory, ju.Arrays.asList(config.trustedPackages: _*))
                 }
             }
@@ -86,7 +86,7 @@ private[reactivemq] class ConnectionFactory(key: ConnectionKey, config: ReActive
     import com.codemettle.reactivemq.activemq.ConnectionFactory.RichAMQConnFact
 
     private val factory = key.userAndPass.fold(new ActiveMQConnectionFactory(key.brokerUrl))(
-        uandp ⇒ new ActiveMQConnectionFactory(uandp._1, uandp._2, key.brokerUrl))
+        uandp => new ActiveMQConnectionFactory(uandp._1, uandp._2, key.brokerUrl))
 
     factory.configureTrustedPackages(config)
 
@@ -126,7 +126,7 @@ private[reactivemq] class ConnectionFactory(key: ConnectionKey, config: ReActive
 
             conn
         } catch {
-            case NonFatal(e) ⇒
+            case NonFatal(e) =>
                 ignoring(classOf[Exception])(jmsConn.close())
                 throw e
         }
@@ -134,13 +134,13 @@ private[reactivemq] class ConnectionFactory(key: ConnectionKey, config: ReActive
 
     private[reactivemq] def cleanup(): Unit = {
         while (connections.nonEmpty) {
-            connections.headOption foreach (c ⇒ closeConnection(c, swallowExceptions = true))
+            connections.headOption foreach (c => closeConnection(c, swallowExceptions = true))
         }
     }
 
     override def toString: String = {
-        val authStr = key.userAndPass.fold("")(e ⇒ s", user=${e._1}")
-        val staticNameStr = key.staticName.fold("")(n ⇒ s", staticName=$n")
+        val authStr = key.userAndPass.fold("")(e => s", user=${e._1}")
+        val staticNameStr = key.staticName.fold("")(n => s", staticName=$n")
         s"ConnectionFactory(${key.brokerUrl}$authStr$staticNameStr)"
     }
 }
