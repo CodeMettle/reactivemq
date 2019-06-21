@@ -27,7 +27,7 @@ sbt:
 
 ```scala
 libraryDependencies ++= Seq(
-    "com.codemettle.reactivemq" %% "reactivemq" % "1.0.2",
+    "com.codemettle.reactivemq" %% "reactivemq" % "1.5.2",
     "org.apache.activemq" % "activemq-client" % "version",
     "com.typesafe.akka" %% "akka-actor" % "version"
 )
