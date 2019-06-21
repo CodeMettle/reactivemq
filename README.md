@@ -39,7 +39,7 @@ Maven:
 <dependency>
     <groupId>com.codemettle.reactivemq</groupId>
     <artifactId>reactivemq</artifactId>
-    <version>1.5.0</version>
+    <version>1.5.2</version>
 </dependency>
 <dependency>
     <groupId>org.apache.activemq</groupId>
@@ -255,6 +255,8 @@ License
 Changelog
 ---------
 
+* **1.5.2**
+  * Build for Scala 2.13
 * **1.5.0**
   * Upgrade ActiveMQ to 5.15
   * Upgrade Akka to 2.5
