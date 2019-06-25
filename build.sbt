@@ -1,5 +1,3 @@
-import SonatypeKeys._
-
 // Metadata
 
 organization := "com.codemettle.reactivemq"
@@ -15,22 +13,6 @@ homepage := Some(url("https://github.com/CodeMettle/reactivemq"))
 organizationName := "CodeMettle, LLC"
 
 organizationHomepage := Some(url("http://www.codemettle.com"))
-
-licenses += ("Apache License, Version 2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
-
-scmInfo := Some(
-    ScmInfo(url("https://github.com/CodeMettle/reactivemq"), "scm:git:https://github.com/CodeMettle/reactivemq.git",
-        Some("scm:git:git@github.com:CodeMettle/reactivemq.git")))
-
-pomExtra := {
-    <developers>
-        <developer>
-            <name>Steven Scott</name>
-            <email>steven@codemettle.com</email>
-            <url>https://github.com/codingismy11to7/</url>
-        </developer>
-    </developers>
-}
 
 // Build
 
@@ -100,6 +82,4 @@ releaseCrossBuild := true
 
 // Publish
 
-xerial.sbt.Sonatype.sonatypeSettings
-
-profileName := "com.codemettle"
+publishTo := sonatypePublishTo.value
