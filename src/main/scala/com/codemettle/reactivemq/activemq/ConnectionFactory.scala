@@ -8,9 +8,8 @@
 package com.codemettle.reactivemq.activemq
 
 import java.{io => jio, util => ju}
-
 import javax.jms
-import javax.jms.{BytesMessage, ObjectMessage, TextMessage}
+
 import org.apache.activemq.ActiveMQConnectionFactory
 
 import com.codemettle.reactivemq.activemq.ConnectionFactory.{Connection, ConnectionKey}
@@ -38,11 +37,13 @@ private[reactivemq] object ConnectionFactory {
             })
         }
 
-        override def createTextMessage(text: String): TextMessage = mc.createTextMessage(text)
+        override def createEmptyMessage: jms.Message = mc.createEmptyMessage
 
-        override def createObjectMessage(obj: jio.Serializable): ObjectMessage = mc.createObjectMessage(obj)
+        override def createTextMessage(text: String): jms.TextMessage = mc.createTextMessage(text)
 
-        override def createBytesMessage(data: => Array[Byte]): BytesMessage = mc.createBytesMessage(data)
+        override def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage = mc.createObjectMessage(obj)
+
+        override def createBytesMessage(data: => Array[Byte]): jms.BytesMessage = mc.createBytesMessage(data)
 
         def createConsumer(dest: jms.Destination): jms.MessageConsumer = jmsSess createConsumer dest
 

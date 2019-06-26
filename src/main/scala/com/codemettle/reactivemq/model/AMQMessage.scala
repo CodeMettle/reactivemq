@@ -25,6 +25,8 @@ import scala.reflect.ClassTag
 case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessageProperties(), headers: Map[String, Any] = Map.empty) {
     def jmsMessage(implicit mc: MessageCreator, dc: DestinationCreator): jms.Message = {
         val msg = body match {
+            case null => mc.createEmptyMessage
+
             case s: String => mc createTextMessage s
 
             case b: Array[Byte] => mc createBytesMessage b

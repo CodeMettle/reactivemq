@@ -7,6 +7,8 @@ import javax.jms
   * Created by steven on 1/2/2018.
   */
 trait MessageCreator {
+  def createEmptyMessage: jms.Message
+
   def createTextMessage(text: String): jms.TextMessage
 
   def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage

@@ -255,6 +255,8 @@ License
 Changelog
 ---------
 
+* **1.5.3**
+  * Support `AMQMessage`s with `null` bodies
 * **1.5.2**
   * Build for Scala 2.13
 * **1.5.0**

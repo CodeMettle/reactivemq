@@ -3,7 +3,7 @@ package com.codemettle.reactivemq
 import java.{io => jio}
 import javax.jms
 
-import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQObjectMessage, ActiveMQTextMessage}
+import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQMessage, ActiveMQObjectMessage, ActiveMQTextMessage}
 
 /**
   * Created by steven on 1/2/2018.
@@ -11,6 +11,8 @@ import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQObjectMessage,
 package object activemq {
 
   implicit object AMQMessageCreator extends MessageCreator {
+
+    override def createEmptyMessage: jms.Message = new ActiveMQMessage
 
     override def createTextMessage(text: String): jms.TextMessage = {
       val msg = new ActiveMQTextMessage
