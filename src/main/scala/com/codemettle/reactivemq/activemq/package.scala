@@ -3,7 +3,7 @@ package com.codemettle.reactivemq
 import java.{io => jio}
 import javax.jms
 
-import org.apache.activemq.command.{ActiveMQBytesMessage, ActiveMQMessage, ActiveMQObjectMessage, ActiveMQTextMessage}
+import org.apache.activemq.command._
 
 /**
   * Created by steven on 1/2/2018.
@@ -32,6 +32,7 @@ package object activemq {
       msg
     }
 
+    override def createMapMessage: jms.MapMessage = new ActiveMQMapMessage
   }
 
 }

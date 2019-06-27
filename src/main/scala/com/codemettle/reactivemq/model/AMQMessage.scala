@@ -8,7 +8,7 @@
 package com.codemettle.reactivemq
 package model
 
-import java.{io => jio, util => ju}
+import java.{io => jio, lang => jl, util => ju}
 import javax.jms
 
 import com.codemettle.reactivemq.CollectionConverters._
@@ -24,12 +24,31 @@ import scala.reflect.ClassTag
 @SerialVersionUID(1L)
 case class AMQMessage(body: Any, properties: JMSMessageProperties = JMSMessageProperties(), headers: Map[String, Any] = Map.empty) {
     def jmsMessage(implicit mc: MessageCreator, dc: DestinationCreator): jms.Message = {
+        def setMap(map: Map[String, Any], mm: jms.MapMessage) = {
+            map foreach {
+                case (key, value) => value match {
+                    case v: String => mm.setString(key, v)
+                    case v: Array[Byte] => mm.setBytes(key, v)
+                    case v: Int => mm.setInt(key, v)
+                    case v: Boolean => mm.setBoolean(key, v)
+                    case v: Byte => mm.setByte(key, v)
+                    case v: Short => mm.setShort(key, v)
+                    case v: Long => mm.setLong(key, v)
+                    case v: Double => mm.setDouble(key, v)
+                    case v => mm.setObject(key, v)
+                }
+            }
+            mm
+        }
+
         val msg = body match {
             case null => mc.createEmptyMessage
 
             case s: String => mc createTextMessage s
 
             case b: Array[Byte] => mc createBytesMessage b
+
+            case m: Map[_, _] => setMap(m.asInstanceOf[Map[String, Any]], mc.createMapMessage)
 
             case s: jio.Serializable => mc createObjectMessage s
 
@@ -115,8 +134,23 @@ object AMQMessage {
             read(ByteString.empty)
         }
 
+        def readMap(msg: jms.MapMessage) = {
+            msg.getMapNames.asInstanceOf[ju.Enumeration[String]].asScala.map { key =>
+                key -> (msg.getObject(key) match {
+                    case v: jl.Integer => v.intValue()
+                    case v: jl.Boolean => v.booleanValue()
+                    case v: jl.Byte => v.byteValue()
+                    case v: jl.Short => v.shortValue()
+                    case v: jl.Long => v.longValue()
+                    case v: jl.Double => v.doubleValue()
+                    case o => o
+                })
+            }.toMap
+        }
+
         val body = msg match {
             case tm: jms.TextMessage => tm.getText
+            case mm: jms.MapMessage => readMap(mm)
             case om: jms.ObjectMessage => om.getObject
             case bm: jms.BytesMessage => readBytes(bm)
             case  _: jms.Message => null.asInstanceOf[Serializable]

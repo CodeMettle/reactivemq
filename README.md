@@ -257,6 +257,7 @@ Changelog
 
 * **1.5.3**
   * Support `AMQMessage`s with `null` bodies
+  * Support `jms.MapMessage`s
 * **1.5.2**
   * Build for Scala 2.13
 * **1.5.0**

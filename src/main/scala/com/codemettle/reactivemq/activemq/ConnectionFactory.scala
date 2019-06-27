@@ -45,6 +45,8 @@ private[reactivemq] object ConnectionFactory {
 
         override def createBytesMessage(data: => Array[Byte]): jms.BytesMessage = mc.createBytesMessage(data)
 
+        override def createMapMessage: jms.MapMessage = mc.createMapMessage
+
         def createConsumer(dest: jms.Destination): jms.MessageConsumer = jmsSess createConsumer dest
 
         def createProducer(dest: jms.Destination): jms.MessageProducer = jmsSess createProducer dest

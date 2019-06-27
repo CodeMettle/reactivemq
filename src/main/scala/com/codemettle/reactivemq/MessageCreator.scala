@@ -14,6 +14,8 @@ trait MessageCreator {
   def createObjectMessage(obj: jio.Serializable): jms.ObjectMessage
 
   def createBytesMessage(data: => Array[Byte]): jms.BytesMessage
+
+  def createMapMessage: jms.MapMessage
 }
 
 trait DestinationCreator {
