@@ -7,7 +7,7 @@
  */
 
 object Versions {
-  val activemq = "5.15.3"
+  val activemq = "5.16.0"
   val akka = "2.5.23"
   val camel = "2.21.0"
   val logback = "1.1.2"

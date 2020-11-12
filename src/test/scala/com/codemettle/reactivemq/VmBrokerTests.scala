@@ -109,6 +109,9 @@ class VmBrokerTests(_system: ActorSystem) extends TestKit(_system) with FlatSpec
     override protected def beforeAll(): Unit = {
         setLogging()
 
+        // Needed post-5.15.3 for some reason to serialize Integer.
+        System.setProperty("org.apache.activemq.SERIALIZABLE_PACKAGES", "java.lang")
+
         startBroker()
 
         val p = Promise[Unit]()
